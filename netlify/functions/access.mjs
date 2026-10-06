@@ -18,15 +18,20 @@ export default async (req) => {
   // 2. Check that user's access to each product with your secret API key.
   const apiKey = env("WHOP_API_KEY");
   if (!apiKey) return json({ plan: "free", error: "missing_api_key" }, 500);
-  const has = async (productId) => {
-    if (!productId) return false;
-    const r = await fetch(`https://api.whop.com/api/v1/users/${encodeURIComponent(user.sub)}/access/${encodeURIComponent(productId)}`,
+  const check = async (resourceId) => {
+    const r = await fetch(`https://api.whop.com/api/v1/users/${encodeURIComponent(user.sub)}/access/${encodeURIComponent(resourceId)}`,
       { headers: { Authorization: `Bearer ${apiKey}` } });
-    if (!r.ok) return false;
-    const j = await r.json();
-    return j.has_access === true;
+    if (!r.ok) return { has_access: false, access_level: "no_access" };
+    return r.json();
   };
-  const [whale, pro] = await Promise.all([has(env("WHOP_WHALE_PRODUCT_ID") || "prod_bvzKsoOr94D5x"), has(env("WHOP_PRO_PRODUCT_ID") || "prod_ZaXr7QRtxyhIh")]);
+  const [biz, whale, pro] = await Promise.all([
+    check(env("WHOP_BUSINESS_ID") || "biz_SbLaec3slpkyMu"),
+    check(env("WHOP_WHALE_PRODUCT_ID") || "prod_bvzKsoOr94D5x"),
+    check(env("WHOP_PRO_PRODUCT_ID") || "prod_ZaXr7QRtxyhIh"),
+  ]);
 
-  return json({ plan: whale ? "whale" : pro ? "pro" : "free", name: user.preferred_username || user.name || "" });
+  // You (the owner) and anyone on your Whop team get Whale automatically.
+  const isTeam = biz.access_level === "admin" || whale.access_level === "admin" || pro.access_level === "admin";
+  const plan = isTeam || whale.has_access === true ? "whale" : pro.has_access === true ? "pro" : "free";
+  return json({ plan, team: isTeam, name: user.preferred_username || user.name || "" });
 };
