@@ -323,7 +323,7 @@ tbody tr:last-child td{border-bottom:0}
     <div class="mtop"><h2 id="prTitle">See the movers before the timeline does</h2><button class="btn" data-close aria-label="Close">✕</button></div>
     <p>Every coin and the safety check are free. Paid plans add speed and alerts.</p>
     <div class="plans">
-      <div class="plan"><h3>Free</h3><div class="amt">$0</div><ul><li>Every coin, every page</li><li>Signal Score and safety check</li><li>Watchlist up to 5 coins</li><li>Prices refresh every 60 seconds</li></ul><button class="btn" disabled>Current plan</button></div>
+      <div class="plan"><h3>Free</h3><div class="amt">$0</div><ul><li>Every coin, every page</li><li>Signal Score and safety check</li><li>Watchlist up to 5 coins</li><li>Prices refresh every 60 seconds</li></ul><button class="btn" disabled id="freeBtn">Current plan</button></div>
       <div class="plan best"><h3>Pro <span class="tag">MOST POPULAR</span></h3><div class="amt">$19<small> /week</small></div><ul><li>Prices refresh every 15 seconds</li><li>Price, score and pump alerts</li><li>Unlimited watchlist</li><li>Live price chart on every coin</li></ul><a class="btn pro" data-plan="pro" href="#" target="_blank" rel="noopener">Get Pro · $19/week</a></div>
       <div class="plan"><h3>Whale</h3><div class="amt">$49<small> /month</small></div><ul><li>Everything in Pro</li><li>Market-wide alert when any coin crosses your score</li><li>Full candlestick chart on every coin</li><li>Priority support</li></ul><a class="btn" data-plan="whale" href="#" target="_blank" rel="noopener">Get Whale · $49/month</a></div>
     </div>
@@ -809,8 +809,9 @@ $('#goPro').onclick=()=>openModal('pricing');$('#howBtn').onclick=()=>openModal(
 document.querySelectorAll('[data-plan]').forEach(a=>{const u=WHOP[a.dataset.plan];if(u)a.href=u;else a.addEventListener('click',e=>{e.preventDefault();toast('Checkout link not added yet')})});
 if(!WHOP.pro&&!WHOP.whale)$('#payNote').textContent="Checkout isn't connected yet.";
 $('#previewPlan').onclick=()=>{plan=plan==='free'?'whale':'free';S.set('ms_plan',plan);applyPlan();closeModals();toast(plan==='free'?'Back on the Free plan':'Previewing Whale features on this device');render();updateStatus();clearTimeout(timer);if(mode==='live')timer=setTimeout(tick,interval())};
+function updatePlanButtons(){const fb=$('#freeBtn');if(fb)fb.textContent=plan==='free'?'Current plan':'Free plan';document.querySelectorAll('[data-plan]').forEach(a=>{const p=a.dataset.plan;if(!a.dataset.label)a.dataset.label=a.textContent;if(p===plan){a.textContent='Current plan';a.style.pointerEvents='none';a.style.opacity='.55'}else if(plan==='whale'&&p==='pro'){a.textContent='Included in Whale';a.style.pointerEvents='none';a.style.opacity='.55'}else{a.textContent=a.dataset.label;a.style.pointerEvents='';a.style.opacity=''}})}
 function applyPlan(){
-  $('#goPro').textContent=paid()?plan[0].toUpperCase()+plan.slice(1)+' plan':'Go Pro';
+  $('#goPro').textContent='Go Pro';updatePlanButtons();
   $('#previewPlan').textContent=paid()?'Switch back to Free':'Preview paid features on this device';
   $('#previewPlan').hidden=!!WHOP_CLIENT_ID;
   const si=$('#signin');si.textContent=me?(me.name||'Account'):'Sign in';si.classList.toggle('on',!!me);
