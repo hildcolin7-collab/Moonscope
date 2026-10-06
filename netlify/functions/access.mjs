@@ -1,8 +1,7 @@
 // Moonscope: checks which plan a signed-in Whop user has.
-// Needs three environment variables in Netlify (Site configuration > Environment variables):
+// Needs one environment variable in Netlify (Project configuration > Environment variables):
 //   WHOP_API_KEY            your Whop API key (keep it secret, never put it in index.html)
-//   WHOP_PRO_PRODUCT_ID     the Pro product ID (starts with prod_)
-//   WHOP_WHALE_PRODUCT_ID   the Whale product ID (starts with prod_)
+// Product IDs are built in below (Pro: prod_ZaXr7QRtxyhIh, Whale: prod_bvzKsoOr94D5x).
 const env = (k) => (globalThis.Netlify?.env?.get?.(k)) ?? process.env[k];
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
@@ -27,7 +26,7 @@ export default async (req) => {
     const j = await r.json();
     return j.has_access === true;
   };
-  const [whale, pro] = await Promise.all([has(env("WHOP_WHALE_PRODUCT_ID")), has(env("WHOP_PRO_PRODUCT_ID"))]);
+  const [whale, pro] = await Promise.all([has(env("WHOP_WHALE_PRODUCT_ID") || "prod_bvzKsoOr94D5x"), has(env("WHOP_PRO_PRODUCT_ID") || "prod_ZaXr7QRtxyhIh")]);
 
   return json({ plan: whale ? "whale" : pro ? "pro" : "free", name: user.preferred_username || user.name || "" });
 };
