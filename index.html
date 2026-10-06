@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<title>Moonscope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: sticky header with page nav; Home is a stack of sections (cards, lists); other pages are one filterable table; a coin opens a side drawer. Single dark look by choice. */
+:root{
+  --bg:#0a0d13; --surface:#11161f; --raised:#18202c; --line:#222c3b; --hover:#1c2533;
+  --fg:#e9edf5; --muted:#8a95a9; --faint:#5d677a;
+  --accent:#ffb21e; --accent-ink:#1d1300;
+  --up:#2fd08f; --down:#ff5c6c; --warn:#ffb21e; --info:#5aa2ff; --pump:#5ef0a0;
+  --f-display:"Outfit", system-ui, sans-serif;
+  --f-body:"DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{margin:0;font-family:var(--f-body);font-size:14px;line-height:1.45}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
+
+/* header */
+.hdr{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.hin{max-width:1320px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:9px;font-family:var(--f-display);font-weight:800;font-size:20px;flex:none;background:none;border:0;padding:0}
+.logo svg{width:28px;height:28px}
+.pages{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.pages button{flex:none;background:none;border:0;border-radius:8px;padding:8px 11px;color:var(--muted);font-weight:700}
+.pages button:hover{color:var(--fg);background:var(--raised)}
+.pages button[aria-current="page"]{color:var(--fg);background:var(--raised)}
+.pages .pf{color:var(--pump)}
+.search{margin-left:auto;position:relative;flex:0 1 300px;min-width:0}
+.search input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 32px}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--faint)}
+.search kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--f-mono);font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.btn{border:0;border-radius:8px;padding:9px 14px;font-weight:700;background:var(--raised);display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn.pro{background:var(--accent);color:var(--accent-ink)}
+.btn.pro:hover{filter:brightness(1.06);background:var(--accent)}
+.btn.sm{padding:6px 10px;font-size:12.5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.icon-btn{position:relative;background:var(--raised);border:0;border-radius:8px;width:38px;height:38px;display:grid;place-items:center;flex:none}
+.icon-btn svg{width:18px;height:18px}
+.badge{position:absolute;top:-4px;right:-4px;background:var(--down);color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:grid;place-items:center;padding:0 4px}
+.mpages{display:none;gap:4px;overflow-x:auto;scrollbar-width:none;padding:0 16px 10px}
+.mpages button{flex:none;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-weight:700;color:var(--muted)}
+.mpages button[aria-current="page"]{color:var(--fg);border-color:var(--accent)}
+
+.tick{border-bottom:1px solid var(--line);overflow:hidden;white-space:nowrap;background:var(--bg)}
+.tick-track{display:inline-flex;gap:28px;padding:7px 0;animation:scroll 80s linear infinite}
+.tick button{background:none;border:0;padding:0;font-size:12.5px;color:var(--muted)}
+.tick b{color:var(--fg);font-weight:700;margin-right:6px}
+@keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+.wrap{max-width:1320px;margin:0 auto;padding-inline:16px;padding-block:16px 56px}
+.status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:16px}
+.status .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.status.live .dot{background:var(--up);box-shadow:0 0 0 4px #2fd08f26}
+.status.snap .dot{background:var(--info)}
+.status b{color:var(--fg)}
+.status .grow{flex:1;min-width:220px}
+.linkish{background:none;border:0;color:var(--muted);font-weight:600;text-decoration:underline;text-underline-offset:3px;padding:2px}
+.linkish:hover{color:var(--fg)}
+
+/* home */
+.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:28px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.pcard small{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
+.pcard b{font-family:var(--f-mono);font-size:19px;font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcard span{font-size:12px}
+.heat{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--down),var(--warn),var(--up));position:relative;margin-top:9px}
+.heat i{position:absolute;top:-4px;width:4px;height:14px;border-radius:2px;background:var(--fg);transform:translateX(-50%)}
+.sec{margin-bottom:34px}
+.sech{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.sech h2{font-family:var(--f-display);font-size:20px;margin:0;display:flex;align-items:center;gap:8px}
+.sech p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.sech .more{background:none;border:0;color:var(--accent);font-weight:700;white-space:nowrap;padding:4px}
+.pill{font-size:10.5px;font-weight:800;letter-spacing:.05em;padding:2px 8px;border-radius:999px;background:#5ef0a01f;color:var(--pump);font-family:var(--f-body)}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.ccard{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0;transition:border-color .15s,transform .15s}
+.ccard:hover{border-color:#3a475c;transform:translateY(-2px)}
+.chead{display:flex;align-items:center;gap:10px;min-width:0}
+.chead > div{min-width:0;flex:1}
+.chead .s{font-weight:800;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chead .n{font-size:12px;color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cprice{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.cprice .p{font-family:var(--f-mono);font-size:16px;font-weight:600}
+.cmeta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+.cmeta b{color:var(--fg);font-family:var(--f-mono);font-weight:600}
+.cfoot{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.lrow{display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left}
+.lrow:last-child{border-bottom:0}
+.lrow:hover{background:var(--hover)}
+.lrow .rk{color:var(--faint);font-family:var(--f-mono);font-size:12px}
+.lrow .who{display:flex;align-items:center;gap:10px;min-width:0}
+.lrow .who span{min-width:0}
+.lrow .who b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .who small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .r{text-align:right;font-family:var(--f-mono)}
+.lrow .r small{display:block;color:var(--muted);font-size:11.5px}
+.metas{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.meta{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.meta:hover{border-color:#3a475c}
+.meta b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta small{color:var(--muted);font-size:12px}
+.meta .num{font-size:13px}
+.cta{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(110deg,#2a1d04,#11161f 60%);border:1px solid #4a3608;border-radius:14px;padding:20px 22px}
+.cta h3{margin:0;font-family:var(--f-display);font-size:20px}
+.cta p{margin:4px 0 0;color:var(--muted)}
+
+/* page head + filters */
+.phead{margin-bottom:12px}
+.phead h1{font-family:var(--f-display);font-weight:800;font-size:26px;margin:0}
+.phead p{margin:3px 0 0;color:var(--muted);max-width:75ch}
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.chips{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.chips button{flex:none;border:0;background:none;border-radius:6px;padding:6px 11px;font-weight:600;color:var(--muted);display:flex;gap:6px;align-items:center}
+.chips button[aria-pressed="true"]{background:var(--raised);color:var(--fg)}
+.cdot{width:8px;height:8px;border-radius:50%;flex:none}
+.sel{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:7px 10px;max-width:100%}
+.toggle{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:600;font-size:13px;cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--accent);width:16px;height:16px}
+.count{margin-left:auto;color:var(--muted);font-size:13px}
+
+/* table */
+.tscroll{overflow-x:auto}
+table.main{width:100%;border-collapse:collapse;min-width:1040px}
+th{font-size:11.5px;font-weight:700;color:var(--muted);text-align:right;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface)}
+th.l,td.l{text-align:left}
+th[data-sort]{cursor:pointer}
+th[data-sort]:hover{color:var(--fg)}
+th .arr{color:var(--accent)}
+td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--hover)}
+tbody tr:last-child td{border-bottom:0}
+.rank{color:var(--faint);width:34px}
+.tok{display:flex;align-items:center;gap:10px;min-width:0}
+.av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:11px;color:#0a0d13;flex:none;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+.av.lg{width:46px;height:46px;font-size:14px}
+.tok .nm{font-weight:700;display:flex;gap:6px;align-items:center;max-width:170px;overflow:hidden}
+.tok .sub{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;max-width:220px;overflow:hidden}
+.tok .sub em{font-style:normal;overflow:hidden;text-overflow:ellipsis}
+.chain{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--raised);color:var(--muted);flex:none}
+.pf-tag{font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;background:#5ef0a01a;color:var(--pump);flex:none}
+.star{background:none;border:0;padding:2px;color:var(--faint);font-size:16px;line-height:1}
+.star.on{color:var(--accent)}
+.bsr{display:inline-flex;flex-direction:column;gap:4px;align-items:flex-end}
+.bsr .bar{width:80px;height:5px;border-radius:3px;background:var(--down);overflow:hidden;display:flex}
+.bsr .bar i{background:var(--up);display:block;height:100%;border-right:2px solid var(--surface)}
+.bsr small{font-size:11px;color:var(--muted)}
+.ring{--p:0;width:34px;height:34px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--raised) 0);display:inline-grid;place-items:center;vertical-align:middle;flex:none}
+.ring b{width:26px;height:26px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-family:var(--f-mono);font-size:11px;font-weight:600}
+.risk{display:inline-flex;align-items:center;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px}
+.risk.low{background:#2fd08f1f;color:var(--up)}
+.risk.med{background:#ffb21e1f;color:var(--warn)}
+.risk.high{background:#ff5c6c1f;color:var(--down)}
+.flash-up{animation:fu 1s}.flash-down{animation:fd 1s}
+@keyframes fu{from{background:#2fd08f33}to{background:transparent}}
+@keyframes fd{from{background:#ff5c6c33}to{background:transparent}}
+.empty{padding:44px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font-size:15px;margin-bottom:4px}
+.pager{display:flex;justify-content:center;padding:12px}
+.foot{margin-top:28px;font-size:12px;color:var(--faint);max-width:100ch;border-top:1px solid var(--line);padding-top:14px}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:#0008;z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:41;overflow-y:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 18px calc(28px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;box-shadow:-20px 0 40px #0008}
+.dhead{display:flex;align-items:center;gap:12px}
+.dhead h2{margin:0;font-family:var(--f-display);font-size:20px;line-height:1.2;overflow-wrap:anywhere}
+.dhead .x{margin-left:auto;background:var(--raised);border:0;border-radius:8px;width:34px;height:34px;font-size:18px;color:var(--muted);flex:none}
+.price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.price .p{font-family:var(--f-mono);font-size:28px;font-weight:600}
+.links{display:flex;gap:6px;flex-wrap:wrap}
+.addr{display:flex;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.addr span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.card{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h3{margin:0 0 10px;font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.chg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;height:140px;padding-top:6px}
+.chg .col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:6px}
+.chg .area{width:100%;flex:1;display:flex;flex-direction:column}
+.chg .half{flex:1;display:flex;justify-content:center}
+.chg .half.hpos{align-items:flex-end;border-bottom:1px solid var(--line)}
+.chg .half.hneg{align-items:flex-start}
+.chg .bar{display:block;width:56%;max-width:48px;border-radius:4px 4px 0 0}
+.chg .half.hneg .bar{border-radius:0 0 4px 4px}
+.chg .v{font-family:var(--f-mono);font-size:12px;font-weight:600}
+.chg .k{font-size:11.5px;color:var(--muted);font-weight:700}
+.chartbox{position:relative;height:150px}
+.chartbox canvas{width:100%;height:100%;display:block}
+.tip{position:absolute;pointer-events:none;background:var(--raised);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;white-space:nowrap;transform:translate(-50%,-115%)}
+.embed{width:100%;height:420px;border:0;border-radius:8px;display:block;background:var(--bg)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stats div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.stats small{color:var(--muted);font-size:11.5px}
+.stats b{font-family:var(--f-mono);font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis}
+.txt{width:100%;border-collapse:collapse;font-size:13px}
+.txt th,.txt td{padding:6px 4px;border-bottom:1px solid var(--line);background:none}
+.txt th{font-size:11px}
+.txt tr:last-child td{border-bottom:0}
+.brk{display:flex;flex-direction:column;gap:9px}
+.brow{display:grid;grid-template-columns:118px minmax(0,1fr) 46px;gap:10px;align-items:center;font-size:13px}
+.brow .track{height:7px;border-radius:4px;background:var(--raised);overflow:hidden}
+.brow .track i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+.brow > span:last-child{text-align:right;font-family:var(--f-mono);color:var(--muted);font-size:12px}
+.brow small{grid-column:2/4;color:var(--faint);font-size:11.5px;margin-top:-6px}
+.checks{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.checks li{display:flex;gap:10px;align-items:center;font-size:13.5px}
+.ic{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+.ic.ok{background:#2fd08f22;color:var(--up)}
+.ic.bad{background:#ff5c6c22;color:var(--down)}
+.ic.mid{background:#ffb21e22;color:var(--warn)}
+.checks small{color:var(--muted);margin-left:auto;font-family:var(--f-mono);text-align:right}
+.dacts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{font-size:12px;color:var(--faint);margin:0}
+.mini-form{display:flex;gap:6px;flex-wrap:wrap}
+.mini-form select,.mini-form input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-width:0}
+.mini-form input{width:120px;font-family:var(--f-mono)}
+
+/* modals */
+.modal{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:#000b}
+.mbox{background:var(--surface);border:1px solid var(--line);border-radius:14px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:22px}
+.mbox.narrow{width:min(620px,100%)}
+.mtop{display:flex;justify-content:space-between;align-items:start;gap:12px}
+.mbox h2{font-family:var(--f-display);margin:0;font-size:24px}
+.mbox > p{color:var(--muted);margin:6px 0 18px}
+.plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.plan{border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.plan.best{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.plan h3{margin:0;font-size:16px;display:flex;justify-content:space-between;align-items:center}
+.plan .tag{font-size:10.5px;font-weight:800;background:var(--accent);color:var(--accent-ink);padding:2px 8px;border-radius:999px}
+.plan .amt{font-family:var(--f-display);font-size:34px;font-weight:800;line-height:1}
+.plan .amt small{font-size:14px;color:var(--muted);font-family:var(--f-body);font-weight:500}
+.plan ul{margin:0;padding-left:18px;color:var(--muted);display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.plan .btn{margin-top:auto}
+.how{display:flex;flex-direction:column;gap:10px;color:var(--muted)}
+.how h3{color:var(--fg);margin:8px 0 0;font-size:15px}
+.how p{margin:0}
+.alist{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.arow{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.arow .grow{flex:1;min-width:0}
+.arow small{color:var(--muted);display:block}
+.arow.fired{border-color:#2fd08f66}
+#signin.on{background:#2fd08f1f;color:var(--up)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);font-weight:700;padding:10px 16px;border-radius:10px;z-index:60;max-width:calc(100% - 32px)}
+
+@media (max-width:1100px){.cards{grid-template-columns:repeat(3,minmax(0,1fr))}.cards .ccard:nth-child(n+7){display:none}.metas{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:900px){
+  .pages{display:none}.mpages{display:flex}
+  .hero{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cols2{grid-template-columns:1fr}
+  .plans{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  table.main{min-width:0}
+  .xs-hide{display:none}
+  td,th{padding:10px 8px}
+  .tok .nm{max-width:110px}.tok .sub{max-width:130px}
+  .search kbd{display:none}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cards .ccard:nth-child(n+5){display:none}
+  .metas{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .count{margin-left:0;width:100%}
+}
+@media (max-width:560px){
+  .logo span{display:none}
+  .hin{gap:8px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .brow{grid-template-columns:96px minmax(0,1fr) 42px}
+  .ccard{padding:12px}
+  .cmeta{flex-direction:column;gap:2px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="hdr">
+  <div class="hin">
+    <button class="logo" data-page="home" aria-label="Moonscope home"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="#ffb21e" stroke-width="2.5"/><circle cx="16" cy="16" r="7" fill="none" stroke="#ffb21e" stroke-width="2" opacity=".5"/><path d="M16 16 L26 8" stroke="#ffb21e" stroke-width="2.5" stroke-linecap="round"/><circle cx="22" cy="11" r="2.4" fill="#2fd08f"/></svg><span>Moonscope</span></button>
+    <nav class="pages" id="pages" aria-label="Pages"></nav>
+    <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" type="search" placeholder="Search coin or contract" aria-label="Search coins" autocomplete="off"><kbd>/</kbd></label>
+    <button class="icon-btn" id="bell" aria-label="Alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="badge" id="bellBadge" hidden>0</span></button>
+    <button class="btn" id="signin">Sign in</button>
+    <button class="btn pro" id="goPro">Go Pro</button>
+  </div>
+  <nav class="mpages" id="mpages" aria-label="Pages"></nav>
+</header>
+<div class="tick" aria-label="Biggest 1-hour movers"><div class="tick-track" id="tick"></div></div>
+
+<main class="wrap">
+  <div class="status" id="status"><span class="dot"></span><span class="grow" id="statusText">Loading market data…</span><button class="linkish" id="howBtn">How the score works</button></div>
+  <section id="home"></section>
+  <section id="list" hidden>
+    <div class="phead"><h1 id="lTitle"></h1><p id="lSub"></p></div>
+    <div class="filters">
+      <div class="chips" id="sub" role="group" aria-label="Show" hidden></div>
+      <div class="chips" id="chains" role="group" aria-label="Chain"></div>
+      <select class="sel" id="minLiq" aria-label="Minimum liquidity"><option value="0">Any liquidity</option><option value="10000">Liquidity $10K+</option><option value="50000">Liquidity $50K+</option><option value="250000">Liquidity $250K+</option><option value="1000000">Liquidity $1M+</option></select>
+      <select class="sel" id="mcap" aria-label="Market cap"><option value="0-">Any market cap</option><option value="0-1000000">Under $1M</option><option value="1000000-10000000">$1M to $10M</option><option value="10000000-100000000">$10M to $100M</option><option value="100000000-">$100M+</option></select>
+      <label class="toggle"><input type="checkbox" id="hideRisk"> Hide high risk</label>
+      <button class="linkish" id="reset">Reset</button>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="box"><div class="tscroll"><table class="main"><thead><tr id="thead"></tr></thead><tbody id="rows"></tbody></table></div><div class="pager" id="pager" hidden><button class="btn" id="moreBtn">Show more</button></div></div>
+  </section>
+  <p class="foot">Market data from DexScreener, covering pump.fun, PumpSwap, Raydium, Meteora, Orca, Uniswap, Aerodrome, PancakeSwap and more. Signal Score measures trading activity right now; it is not a prediction or financial advice. Most memecoins lose most of their value, so read the safety check and never trade more than you can afford to lose. Moonscope never asks for your wallet or keys.</p>
+</main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="Coin details"></aside>
+
+<div class="modal" id="pricing" hidden>
+  <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="prTitle">
+    <div class="mtop"><h2 id="prTitle">See the movers before the timeline does</h2><button class="btn" data-close aria-label="Close">✕</button></div>
+    <p>Every coin and the safety check are free. Paid plans add speed and alerts.</p>
+    <div class="plans">
+      <div class="plan"><h3>Free</h3><div class="amt">$0</div><ul><li>Every coin, every page</li><li>Signal Score and safety check</li><li>Watchlist up to 5 coins</li><li>Prices refresh every 60 seconds</li></ul><button class="btn" disabled>Current plan</button></div>
+      <div class="plan best"><h3>Pro <span class="tag">MOST POPULAR</span></h3><div class="amt">$19<small> /week</small></div><ul><li>Prices refresh every 15 seconds</li><li>Price, score and pump alerts</li><li>Unlimited watchlist</li><li>Live price chart on every coin</li></ul><a class="btn pro" data-plan="pro" href="#" target="_blank" rel="noopener">Get Pro · $19/week</a></div>
+      <div class="plan"><h3>Whale</h3><div class="amt">$49<small> /month</small></div><ul><li>Everything in Pro</li><li>Market-wide alert when any coin crosses your score</li><li>Full candlestick chart on every coin</li><li>Priority support</li></ul><a class="btn" data-plan="whale" href="#" target="_blank" rel="noopener">Get Whale · $49/month</a></div>
+    </div>
+    <p class="note" style="margin-top:14px"><span id="payNote">Secure checkout by Whop. After paying, sign in with Whop on Moonscope to unlock your plan.</span> <button class="linkish" id="prSignin">Already a member? Sign in</button> <button class="linkish" id="previewPlan">Preview paid features on this device</button></p>
+  </div>
+</div>
+<div class="modal" id="how" hidden>
+  <div class="mbox narrow" role="dialog" aria-modal="true" aria-labelledby="howTitle">
+    <div class="mtop"><h2 id="howTitle">How the Signal Score works</h2><button class="btn" data-close aria-label="Close">✕</button></div>
+    <div class="how">
+      <p>Every coin gets a score from 0 to 100, rebuilt each time prices refresh. Higher means more is happening right now.</p>
+      <h3>Volume spike · 25 pts</h3><p>Last hour's volume compared with its average hour over the past day. Four times normal earns full points.</p>
+      <h3>Buy pressure · 20 pts</h3><p>Share of buys versus sells in the last hour. 75% buys or more earns full points.</p>
+      <h3>Trade activity · 15 pts</h3><p>Trades in the last hour against the daily average.</p>
+      <h3>Momentum · 15 pts</h3><p>Price change over 1 hour and 6 hours.</p>
+      <h3>Liquidity depth · 15 pts</h3><p>Pool size as a share of market cap. Deeper pools mean less slippage and are harder to drain.</p>
+      <h3>Community · 10 pts</h3><p>Listed website and socials, plus paid boosts on DexScreener.</p>
+      <h3>Crash brake</h3><p>A coin down more than 80% in 24 hours or with under $5K liquidity has its score cut in half.</p>
+      <h3>Safety check</h3><p>Separate from the score. It flags thin liquidity, crashes, brand-new pairs, missing socials and heavy selling. For Solana coins, the RugCheck button runs an on-chain scan of holders and token authorities.</p>
+    </div>
+  </div>
+</div>
+<div class="modal" id="alerts" hidden>
+  <div class="mbox narrow" role="dialog" aria-modal="true" aria-labelledby="alTitle">
+    <div class="mtop"><h2 id="alTitle">Alerts</h2><button class="btn" data-close aria-label="Close">✕</button></div>
+    <div id="alertsBody"></div>
+  </div>
+</div>
+<div class="modal" id="account" hidden>
+  <div class="mbox narrow" role="dialog" aria-modal="true" aria-labelledby="acTitle">
+    <div class="mtop"><h2 id="acTitle">Your account</h2><button class="btn" data-close aria-label="Close">✕</button></div>
+    <div id="accountBody" style="margin-top:14px;display:flex;flex-direction:column;gap:12px"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const S={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let tt;function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,2800)}
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const API='https://api.dexscreener.com';
+/* ===== PAYMENTS: paste your Whop checkout links here ===== */
+/* Whop sign-in: paste your app's client ID (starts with app_) */
+const WHOP_CLIENT_ID='';
+const ACCESS_API='/.netlify/functions/access';
+const WHOP={pro:'https://whop.com/moonscope-e3d6/moonscope-pro/',whale:'https://whop.com/moonscope-e3d6/moonscope-whale/'};
+
+/* formatting */
+const fmtUSD=v=>!v?'$0':v>=1e9?'$'+(v/1e9).toFixed(2)+'B':v>=1e6?'$'+(v/1e6).toFixed(2)+'M':v>=1e3?'$'+(v/1e3).toFixed(1)+'K':'$'+v.toFixed(0);
+const fmtN=v=>v>=1e6?(v/1e6).toFixed(2)+'M':v>=1e3?(v/1e3).toFixed(1)+'K':String(Math.round(v||0));
+const subs='₀₁₂₃₄₅₆₇₈₉',sub=n=>String(n).split('').map(d=>subs[+d]).join('');
+function fmtPrice(p){if(!p)return '$0';if(p>=1000)return '$'+p.toLocaleString(undefined,{maximumFractionDigits:0});if(p>=1)return '$'+p.toFixed(3);if(p>=0.01)return '$'+p.toFixed(4);if(p>=0.0001)return '$'+p.toFixed(6);
+  const z=Math.floor(-Math.log10(p));let sig=Math.round(p*Math.pow(10,z+4));if(sig>=10000)sig=Math.round(sig/10);return '$0.0'+sub(z)+sig}
+const pct=v=>v==null||isNaN(v)?'–':(v>0?'+':'')+(Math.abs(v)>=1000?Math.round(v).toLocaleString():v.toFixed(1))+'%';
+const cls=v=>v==null||isNaN(v)||v===0?'flat':v>0?'up':'down';
+const ageH=t=>t.created?(Date.now()-t.created)/36e5:null;
+const ageTxt=t=>{const h=ageH(t);if(h==null)return '–';return h<1?Math.max(1,Math.round(h*60))+'m':h<48?Math.floor(h)+'h':h<24*60?Math.floor(h/24)+'d':h<24*730?Math.floor(h/24/30)+'mo':Math.floor(h/24/365)+'y'};
+const ago=ms=>{const s=Math.round((Date.now()-ms)/1000);return s<60?s+'s ago':s<3600?Math.floor(s/60)+'m ago':s<86400?Math.floor(s/3600)+'h ago':new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric'})};
+
+const CHAINS={solana:{n:'Solana',c:'#9b7bff'},base:{n:'Base',c:'#3d8bff'},ethereum:{n:'Ethereum',c:'#a9b4c8'},bsc:{n:'BNB',c:'#f3c13a'}};
+const chainName=c=>CHAINS[c]?CHAINS[c].n:c.charAt(0).toUpperCase()+c.slice(1);
+const AVC=['#ffb21e','#2fd08f','#9b7bff','#ff7ab6','#3d8bff','#ff8a3d','#5fe3e3','#e6e35f'];
+const avColor=s=>AVC[[...String(s)].reduce((a,c)=>a+c.charCodeAt(0),0)%AVC.length];
+const isPump=t=>t.chain==='solana'&&(t.dex==='pumpfun'||t.dex==='pumpswap'||/pump$/.test(t.addr));
+const onCurve=t=>t.dex==='pumpfun';
+
+/* established memecoins, always tracked when live */
+const BLUE=[['solana','EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm'],['solana','DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'],['solana','7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr'],['solana','9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump'],['solana','ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY'],['solana','CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump'],['solana','2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv'],['solana','ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82'],['solana','MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5'],['ethereum','0x6982508145454Ce325dDbE47a25d4ec3d2311933'],['ethereum','0xE0f63A424a4439cBE457D80E4f4b51aD25b2c56C'],['ethereum','0xaaeE1A9723aaDb7afA2810263653A34bA2C21C7a'],['ethereum','0xcf0C122c6b73ff809C693DB761e7BaeBe62b6a2E'],['base','0x532f27101965dd16442E59d40670FaF5eBB142E4'],['base','0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4']];
+const blueSet=new Set(BLUE.map(([c,a])=>c+':'+a.toLowerCase()));
+
+/* real snapshot from DexScreener, pulled Oct 6 2026; used when live data can't load */
+const SNAP_AT=Date.parse('2026-10-06T14:00:00Z');
+const SNAP=[
+['solana','EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm','dogwifhat','WIF','orca','D6NdKrKNQPmRZCCnG1GqXtF7MMoHB7qR6GU5TkG59Qz1',0.2571,-0.33,0.06,1.76,1.97,520.97,6897.64,72052.07,292968.86,6,15,176,174,6359,7214,182696.58,256818004,256818004,1716065147000,'c3788335fe7010d9c32ede4f211118f4a703e0b47fee61cd503c33cc9cde242a',['twitter','telegram'],1,0],
+['solana','DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263','Bonk','BONK','orca','5zpyutJu9ee6jFymDGoK7F6S5Kczqtc9FomP3ueKuyA9',0.000003696,0.21,0.09,-2.53,-2.88,1336.23,9362.24,65472.51,287900.22,17,8,145,99,4004,3579,421956.36,328492547,325283036,1671980424000,'ba03c0370670d176dc33bbd212eb023337a460ad7edfa053ca96ae22f31c3dcf',['twitter','telegram','discord'],1,0],
+['solana','7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr','Popcat','POPCAT','raydium','FRhB8L7Y9Qq41qZXYLtC2nw8An1RJfLLxRF2x9RwLLMo',0.05211,-0.23,-0.7,-0.56,-5.32,499.77,1693.91,35889.29,333206.49,0,1,1,9,405,723,4063693.11,51073432,51073432,1702415044000,'Pp6Fvh41hc0bHGK8',['twitter','telegram','instagram'],1,0],
+['solana','9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump','Fartcoin','FARTCOIN','raydium','Bzc9NZfMqkXR6fz1DBph7BDf9BroyEf6pnzESP7v5iiw',0.1720,0,-0.68,-1.6,-5.6,0,16367.93,277879.44,1314968.07,0,0,54,70,6007,5616,8787002.42,172092190,172093189,1729231787000,'9af5672845c89585e9ff1e3b26a640090324aa4d92222052d1043e60ef8182de',['twitter'],1,0],
+['solana','ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY','Moo Deng','MOODENG','raydium','22WrmyTj8x2TRVQen3fxxi2r4Rn6JDHWoMTpsSmn8RUd',0.03845,0,0.15,-0.59,-6.48,0,6037.14,34313.13,289920.15,0,0,27,19,1339,1232,2183132.82,38071305,38071305,1725994387000,'8e02e1e7dec93a4ef4b2404976232940a1d80595e774cf3c5f2d6f23026867a9',['twitter'],1,0],
+['solana','CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump','Goatseus Maximus','GOAT','raydium','9Tb2ohu5P16BpBarqd3N27WnkF51Ukfs8Z1GzzLDxVZW',0.01427,0,-0.16,-1.32,-5.48,0,893.41,15125.4,124141.58,0,0,9,4,812,691,1219927.24,14273162,14273162,1728595144000,'e857505d98436d21d13451a83c93ff4db36d0b53829af8070ddae75845d9b459',['twitter','telegram'],1,0],
+['solana','2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv','Pudgy Penguins','PENGU','orca','FAqh648xeeaTqL7du49sztp9nfj5PjRQrfvaMccyd9cz',0.008815,-0.09,1.76,1.63,11.73,1789.32,22403.94,2363793.34,3082939.29,12,1,126,17,15215,14255,3171306.81,783591846,554142091,1734440426000,'9d5188f603b49ab02f7a75e5d2c2959ec2947c98181501fb11688672e9394efd',['twitter','discord'],1,0],
+['ethereum','0x6982508145454Ce325dDbE47a25d4ec3d2311933','Pepe','PEPE','uniswap','0xA43fe16908251ee70EF74718545e4FE6C5cCEc9f',0.000004340,0,0.07,1.46,-3.51,0,4104.76,81520.92,1225763.93,0,0,27,7,448,408,31989855.41,1795910643,1795910643,1681492871000,'ae001139fa1fcd24f8421d82caf72d8e06fabafab33b089c5d2e6d18039354e7',['twitter'],1,0],
+['ethereum','0xE0f63A424a4439cBE457D80E4f4b51aD25b2c56C','SPX6900','SPX','uniswap','0x52c77b0CB827aFbAD022E6d6CAF2C44452eDbc39',0.4781,0,-1.26,-0.96,-0.23,0,33958.48,149339.97,1153034.93,0,0,7,25,298,392,12393841.06,445144078,445144078,1692154331000,'0eb409d135760501b28367efc53d816c2ca471aa701ae7a825ab171f25974ad6',['telegram'],1,0],
+['base','0x532f27101965dd16442E59d40670FaF5eBB142E4','Brett','BRETT','aerodrome','0x4e829F8A5213c42535AB84AA40BD4aDCCE9cBa02',0.006051,0,-0.68,1.85,3.11,15.31,19532.6,133776.2,266728.7,0,1,27,34,542,546,941114.79,59967194,59967194,null,'',['twitter','telegram'],1,0],
+['solana','BrUimx7KncgRNTggAdZdaX2s5XUqQyR6XMRmEg4mpump','Mintro','MINTRO','pumpswap','8t34p7n94man8wcmFdHedYkJaWEhA9nKGJMLZyZUzbn',0.002227,-0.12,1.12,40.54,1689,28744.71,215447.91,2499368.38,4431676.52,378,197,4526,2645,55343,31590,147825.87,2211813,2211813,1791225432000,'HBa_Koxcb0tHBjbn',['twitter'],1,500],
+['solana','9yMLvMzAo6gjhd8zXo62uZzVP9ev4xHxqL3ZsmgioDM7','Professor Eich','EICH','pumpfun','4CyJK3MXbzG1sPdk6pMtE8fpq17s83QTgX7NTKyXADZR',0.000006997,0,3.84,-49.77,82.7,0,547.79,8397.41,172643.49,0,0,8,6,1001,858,0,6997.62,6997.62,1791193046000,'7KMqX2uD7T-0uKQX',['twitter'],0,550],
+['solana','CZJfrAmMs5Cz4H22PWzfqTJu5FkP7Q2Vvx1oPVL9pump','Agent Cat','AGENTCAT','pumpswap','HyLTPacbYR4V8yQw5bbWwAETZkjcsRw9xzCbayMnU45o',0.00001503,5.38,19.02,-96.4,-99.92,170.85,1329.88,51453.4,8323060.51,3,0,14,15,95919,43823,10528.81,14925,14925,1791067977000,'qlnm9siL7ASfLXBo',['twitter'],1,0],
+['solana','8nKp4JkesNtDgu3PiSjdTdNSrtBt8YCHhW8BU14wpump','Baton Rogue','BATONROGUE','pumpswap','CGFDdPEpn1SfTJXDnRYb1BWS6aTAuWXBd4gCf1LddVt6',0.000003283,0,0,2.48,-99.52,0,0,31.55,1634007.59,0,0,0,0,32452,31730,4167.65,3249,3249,1791149814000,'JMCcSTkUZ_wssHHk',['twitter'],1,0],
+['solana','GbdUYiGiRxhr146N8d5hemgcscU8YUW8oYbKJhuApump','XFUN','XFUN','pumpswap','GTVJzZc2PfPKSWWGw5LJPBpqaUDsTXux1Lw9xvXqZqiS',0.000003396,-0.71,-0.71,-2.47,-22.03,6.1,6.1,40.01,729.45,0,1,0,1,20,62,3606.61,3343,3343,1791152088000,'fMO-9Mwa1UyGW6Zp',['twitter'],1,0],
+['solana','2rFNkrUaPdTFSCNu5KJoGL2Aiq7YZDE8DYZGZzAJCoKc','Anonymous BTC Whale','KING','pumpswap','7GnXYByz4K5DXpvCGSr62TyYhtVHSvqzq5hCsa4W2yCX',0.000003042,0,-0.19,-12.89,-73.59,0,1.51,151.02,5750.06,0,0,0,1,94,142,2969.21,2825,2825,1791152563000,'Hc3N_arj-UubgyuT',['twitter'],1,0],
+];
+const SNAP2=[["meme-hall-of-fame","base","uniswap","0x9a26F5433671751C3276a065f57e5a02D2817973","Keyboard Cat","KEYCAT","0x377FeeeD4820B3B28D1ab429509e7A0789824fCA",0.0004846,0.08,1.02,17.49,27.06,26572.63,216192.83,793393.43,66,33,1409,1540,639518.03,4846426,1711420803000,"182bb8cab7b3e7b6843d74685fa25a663b9cd2edf1bc3bd4f7aa2fc85b30f70b",["twitter","telegram"],1],["meme-hall-of-fame","base","uniswap","0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4","Toshi","TOSHI","0x4b0Aaf3EBb163dd45F663b38b6d93f6093EBC2d3",0.0001005,0,0,0.21,0.1,0,779.21,17174.46,0,0,17,33,915273.1,42281642,1699314201000,"81335196ed123df49cf07f60a69d9101630ca6a150edf22130bd46542e60bdca",["twitter","telegram","tiktok","instagram"],1],["meme-hall-of-fame","ethereum","uniswap","0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9","HarryPotterObamaSonic10Inu","BITCOIN","0x25392D7129040710f152174Af5019004a6F9b18d",0.01267,0,0.31,0.72,-7.31,1958.24,3730.16,45052.16,1,4,113,63,818520.6,12653385,1687411523000,"64f45551990a40ca081f880abfe7047c9b07a7080c6e76f9b2ebdfa532478dff",["twitter","telegram"],1],["meme-hall-of-fame","ethereum","uniswap","0xaaeE1A9723aaDb7afA2810263653A34bA2C21C7a","Mog Coin","MOG","0xc2eaB7d33d3cB97692eCB231A5D0e4A649Cb539d",9.892e-08,0.11,-1.14,1.62,4.17,26544.08,199363.07,483249.32,14,8,184,183,4494002.13,38636948,1689822407000,"830392e34129c07bc012bd814a2b0c1d0a385f4d7bd7ca6069246c402cc63de3",["twitter","telegram"],1],["meme-hall-of-fame","ethereum","uniswap","0x594DaaD7D77592a2b97b725A7AD59D7E188b5bFa","Apu Apustaja","APU","0x5CEd44F03ff443BBE14d8eA23bc24425FB89E3ED",1.913e-05,0,0,0.08,0.04,0,458.35,6500.47,0,0,40,24,817310.78,6466965,1710143147000,"c31d0baeb13adffde4532cd8eda2ef608dd63345f099e6f03c347e034d6371bb",["twitter","telegram","discord"],2],["meme-hall-of-fame","ethereum","uniswap","0xcf0C122c6b73ff809C693DB761e7BaeBe62b6a2E","FLOKI","FLOKI","0xca7c2771D248dCBe09EABE0CE57A62e18dA178c0",2.041e-05,0,-0.23,-0.22,-0.24,2276.78,6420.56,25783.89,0,2,14,52,5881602.25,113140218,1642898407000,"066f9df15312c9fd28debc612c80e3f69e13b3c4b3b2576bd37ee18da67c10a9",["twitter","telegram"],1],["meme-hall-of-fame","ethereum","uniswap","0x76e222b07C53D28b89b0bAc18602810Fc22B49A8","Joe Coin","JOE","0x704aD8d95C12D7FEA531738faA94402725acB035",0.006589,0,-0.06,2.55,12.73,61.52,7377.15,63402.25,0,1,28,32,1209141.14,6589991,1697051723000,"2f2cf8849814de01b0a1a685e16be3f8dfd6c473d73b76b1145e0e6c074626b1",["twitter","telegram"],2],["meme-hall-of-fame","avalanche","traderjoe","0x420FcA0121DC28039145009570975747295f2329","COQINU","COQ","0x41aB86EEcBd110a82cA602D032a461f453066F1E",7.211e-08,0,-0.01,-0.28,-0.44,191.18,446.32,11724.79,2,9,138,67,387635.67,5005096,1701957774000,"bf5c5b8f7608190becab124ec71cf92a1f368c738efc902131cd0e61dfea43e6",["twitter","discord"],0],["meme-hall-of-fame","solana","raydium","5z3EqYQo9HiCEs3R84RCDMu2n7anpDMxRhdK8PSWmrRC","PONKE","PONKE","5uTwG3y3F5cx4YkodgTjWEHDrX5HDKZ5bZZ72x8eQ6zE",0.01452,0.08,-0.31,0.12,-1.24,175.19,1593.52,12911.95,6,4,222,112,1008716.92,6782018,1703383963000,"cfbe2eabb540e7ba8651832435e968e12c9df2efb452e78358e64d8f73ae5760",["twitter","telegram"],1],["meme-hall-of-fame","solana","raydium","63LfDmNb3MQ8mw9MtZ2To9bEA2M71kZUUGq5tiJxcqj9","GIGACHAD","GIGA","4xxM4cdb6MEsCxM52xvYqkNbzvdeWWsPDZrBcTqVGUar",0.001875,0.12,-0.72,0.17,0.47,2378.55,5457.93,121036.41,17,10,1256,1263,1279988.3,18011104,1704403186000,"102ba1dee6cf6239b293dbd86e0e11ddf78e74cdce00030c4511096bd2480e26",["twitter","telegram"],1],["meme-hall-of-fame","solana","meteora","WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk","Wen","WEN","9dZ2bEQ9Ci4uV3FWiLdVPZwQs92kkK4TaMfpfQUJW73n",3.012e-06,0.27,-0.28,-4.01,-3.93,1332.06,2187.56,5900.42,31,6,147,83,31107.18,2192452,1706227729000,"3b5f146d3709efa00175ea0003751b9ec540f2e709aa5999e6fdb70cd7ebfa67",["twitter","telegram"],1],["meme-hall-of-fame","solana","raydium","6ogzHhzdrQr9Pgv6hZ2MNze7UrzBMAFyBBWUYp1Fhitx","RETARDIO","RETARDIO","5eLRsN6qDQTQSBF8KdW4B8mVpeeAzHCCwaDptzMyszxH",0.001516,0,-0.42,4.61,4.86,5.42,4014.85,6234.49,1,8,56,151,293959.43,1516205,1706825286000,"19990237c8377e0d198283c8c9c763e5e2a08533511279288faa8a0b7a418f0b",["twitter","telegram"],1],["meme-hall-of-fame","solana","raydium","ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82","BOOK OF MEME","BOME","DSUvc5qf5LJHHV5e2tD184ixotSnCnwj7i4jJa4Xsrmt",0.0007886,0.08,0.09,-4.11,-8.16,30185.4,366093.07,1489228.46,87,51,2377,3706,12454974.07,54377368,1710401208000,"1fdb1c93b76e5aed7324c2c541558fd75fe7ffb3d0d0fb9ee8370cbac5890e4e",["twitter","telegram"],0],["meme-hall-of-fame","solana","raydium","69kdRLyP5DTRkpHraaSZAQbWmAwzF9guKjZfzMXzcbAs","American Coin","USA","HKprCtGbnh1j8xeQggzWhhVd3kwDUdphqPqDP8vMay8b",1.388e-07,0,0.49,1.42,2.3,1566.45,2235.82,5340.08,3,9,64,58,414019.03,1649777,1710427876000,"69e14ff4c3dd5337ae758f9a54334b23e1a6abcc1bf53bb0af35bc429c156ce0",["twitter","telegram"],0],["meme-hall-of-fame","solana","raydium","8Ki8DpuWNxu9VsS3kQbarsCWMcFGWkzzA8pUPto9zBd5","LOCK IN","LOCKIN","AtWMAA6T9t8cq8XCccCFPGDNNQYXhScuNuY6WVRi7FKe",0.0009733,0.43,0.2,-0.07,1.09,26.37,385.71,5326.38,3,2,62,62,231423.41,967840,1710550043000,"8f5608af628761f167195dadeb31e2df5d3b8522436a0d70bebe2eb0567efbfb",["twitter","telegram"],1],["meme-hall-of-fame","solana","raydium","7BgBvyjrZX1YKz4oh9mjb8ZScatkkwb8DzFx7LoiVkM3","SLERF","SLERF","AgFnRLUScRD2E4nWQxW73hdbSN7eKEUb2jHX7tx9YTYc",0.01441,0,0,-0.67,-0.59,0,6.89,1225.29,0,0,12,28,12694624.55,7208840,1710747025000,"6f43abd0ed3d46732e02f2a5f15610beed2b25d0d25fac7aa4ca113d6f45012f",["twitter","telegram"],1],["meme-hall-of-fame","solana","raydium","GtDZKAqvMZMnti46ZewMiXCa4oXF4bZxwQPoKzXPFxZn","nubcat","NUB","83G6VzJzLRCnHBsLATj94VCpRimyyqwuN6ZfL11McADL",0.002125,0,-0.51,-0.9,-2.24,8.27,5194.39,14564.49,2,3,125,90,580984.47,2125937,1711333309000,"7490db4cfcde6a4f27c602fb698ff8c09bef149e2aca1bb2dcf6651984ee52c5",["twitter","telegram"],1],["meme-hall-of-fame","solana","raydium","MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5","cat in a dogs world","MEW","879F697iuDJGMevRkRcnW21fcXiAeLJK1ffsw2ATebce",0.000322,0,-0.42,-0.49,-0.34,1482.5,23414.86,95520.41,3,14,351,420,6582848.89,28625464,1711430534000,"33effe52dd5b1f6574ca5baaca9c02fecdecb557607a2a72889ceb0537eae9be",["twitter","telegram"],1],["meme-hall-of-fame","solana","raydium","6D7NaB2xsLd7cauWu1wKk6KBsJohJmP2qZH9GEfVi5Ui","Shark Cat","SC","BSzedbEvWRqVksaF558epPWCM16avEpyhm2HgSq9WZyy",0.0008961,0,0,-0.76,0.14,0,434.31,1769.89,0,0,19,26,278928.37,887075,1711451776000,"9dff2b73980785dd7de7d5a8b65afdab5cfdf022da24b72ff1a1beebcdbd8ac8",["twitter","telegram"],1],["brainrot","solana","raydium","DPaQfq5sFnoqw2Sh9WMmmASFL9LNu6RdtDqwE1tab2tB","Skibidi Toilet","SKBDI","BnkDVQKwr7DWx9zmPcqtgCpTfKm7wzp2ydzrE218nrtV",0.003944,0,-0.48,6.59,2.97,21.43,1622.74,8108.54,0,4,16,16,116171.82,295589,1703262885000,"218f4aa1ca1840f861e5f740134bcbf45287ffe49c577a9f381674b169ddccb3",["twitter","telegram","tiktok"],1],["brainrot","solana","raydium","BQX1cjcRHXmrqNtoFWwmE5bZj7RPneTmqXB979b2pump","Italian Brainrot","ITALIANROT","2baC5JL75NosEr2oLJZ14gbNjWDuUq3ui33ZPLZTgCEA",0.0001038,0,0,0.04,-0.14,0,50.86,618.39,0,0,4,11,95940.38,103893,1741795033000,"bd81a418c91cdb644a07a47010fc2f33696a5563a5143a979466562c59358898",["twitter"],1],["brainrot","solana","pumpswap","2wzVMXhLypmP92mXNCq4fuFcd9TCC972AbMfuiH3pump","AI SLOP","AISLOP","8LjfG2dAMgyTQmvKKT3VtwLgfxJc79RwkcLGuq19LSfC",0.0002993,0,1.45,-0.21,-0.06,11.56,393.58,17117.88,2,0,156,189,121022.3,299309,1743302984000,"meO_Miomixj4vtyd",["twitter"],1],["brainrot","solana","pumpswap","CGkRYvHnV6guL8DMadWG57qe6qUm6m3zDyGpMrcvpump","Tom Cruise","CRUISE","ApJQVcapkJkzDKZKeTWL615PeVr6nUECchqzgz1NoXK3",1.469e-05,0,0,-3.09,-5.08,0,193.14,527.33,0,0,3,5,19185,14692,1748964880000,"0deed28b7ba9af6931dbae372aa78f14733ecd75f9d174a71d9a88b051709039",["twitter"],1],["brainrot","solana","pumpswap","GB8KtQfMChhYrCYtd5PoAB42kAdkHnuyAincSSmFpump","Pigeon Doctor","PIGEON","CimyjC9gZZwmX3FANaCm45gSWAFrLCtB6NQWjDNZkjgX",5.298e-05,0,0,0.45,-1.67,0,28.19,308.17,0,0,4,5,44815.71,52977,1769382289000,"qfgYZS0m-D35F81O",["twitter","tiktok"],1],["brainrot","solana","pumpswap","J8PSdNP3QewKq2Z1JJJFDMaqF7KcaiJhR7gbr5KZpump","Tung Tung Tung Sahur","TRIPLET","3KFCgJ5R3zshW8hTDbzjSrrKSRYmKvsMfhc4Vo4iddxD",0.007058,-0.93,0.52,2.06,-7.21,11545.47,61701.35,274023.22,37,21,1253,1212,641627.95,7057537,1771922626000,"KHXna9UvJkXO9zwP",["twitter","telegram","tiktok"],0],["brainrot","solana","pumpswap","8XG6dw8CnVqKBmYwX4W3wfNaRfQK8GcEKbZD5zXHpump","Tralalero Tralala","DOUBLET","8iPSC1nbVWveS88mzbQpaAffAtivFu3PNo86SjgHQCeB",1.851e-05,0,0,0.05,-0.49,0,9.73,86.73,0,0,3,7,16072.93,17975,1772457082000,"bos4vLZrnx5EENYh",["twitter","telegram","tiktok"],1],["brainrot","solana","pumpswap","5gbcBPAN3xc8eRfnRnVzw1g784KAp1ibKYCTYDYKpump","Jon Mud","JONMUD","FvHZ9b49XwePTKmwtAWLkw1bKfqBeym52pqjbQaKfnDm",4.454e-05,0,-0.34,1,-0.97,8.83,5421.96,5489.01,0,1,47,34,21914.27,44528,1780000521000,"WiBS_5b9FEMRkTs1",["twitter"],1],["brainrot","solana","pumpswap","E6u1oEuWWhuexdeVztV7GkQwhDb4yCLKuaUstA88pump","Apple Cat","ACAT","7YhRkEk8qSKyzEry9RWLBY5KbxxjHQJYKXh92pxVHAK8",1.085e-05,0,0,1.29,1.29,0,0.21,0.91,0,0,5,1,11178.19,10854,1781555060000,"wV3Ccx9bzJKrSTko",["twitter","telegram","discord"],1],["brainrot","solana","pumpswap","2aQKC1xiKpEyAWvzSDrULnYLVuybWyx7qrsnpP8hpump","Udin din din dun","UDIN","6YismmnYSgxCw9aWgf3h2GxMr1GDkvWq7oo76RjQ1i6v",7.072e-05,-1.39,6.26,0.69,8.02,726.82,7187.97,10932.73,11,7,131,117,35020.78,70709,1782798133000,"D3RkzihPHPZo5vkq",["twitter","telegram"],1],["brainrot","solana","pumpswap","BgVMUdzzKUAgjrKmLTT9aKXJUoew9YAqHrJUfs7xpump","Cantina's Talking Pigeon","PEIGENGOO","9WuXRFcWE3UTYRbDhKVE1go9fRamkKBZS7HRBR4rrGBC",1.297e-05,0,0,-9.42,-23.64,0,409.44,1188.1,0,0,26,12,16386.09,12963,1784052343000,"5bq0PVyXoRrmLIRO",["twitter","tiktok"],0],["brainrot","solana","pumpswap","C2T1CBTjajVGnHvVz5sFbw2JBq7ZtqUD63HGq4Cwpump","Ballerina Cappuccina","BALLERINA","4QinbWJjMmgLEarCjnvtYW6w6QvcnGF9M8tS3PGuxKdz",1.012e-05,0,0,-1.01,-1.01,0,7.65,81.24,0,0,0,2,10876.35,10122,1784585323000,"uPMj0iLY2MZBnje0",["twitter","tiktok"],1],["brainrot","solana","pumpswap","CbyTNf7UPzvewHh4Zp6umogM2RWahhmGRJWLJnPwpump","BIKE TYSON","BIKETYSON","41rzTMB7JHPTyMXzrYwdqnBecJRhkb8KHYAjrQ9cYxJx",0.000965,0.47,-0.99,-4.23,-23.67,11457.9,25619.92,139304.19,62,66,1262,1067,146342.4,928223,1788452170000,"DjM2YD5qgo0IFL0l",["twitter"],1],["brainrot","solana","pumpswap","EHpaxqVVjyyPt2cjfft5SqTkfaEjCF7RUCaFxCrZpump","WHEEL SMITH","WHEELSMITH","7bSVnqtU2CWSby3jXzwKnEYGZKZMv6JTZBDVATeoMo2J",3.386e-05,-1.6,-3.57,-8.19,-25.54,257.77,796.72,8652.47,2,2,106,81,20495.18,33123,1788611815000,"cVLtKDvNVyOwtdAC",["twitter"],1],["brainrot","solana","raydium","FbYYdLRX2sL5xzLGjdhfaWNhtpxqXBSoqvUY8o8W8eNF","Toe Rogan","TOEROGAN","6xRJbNNwpZxQ7kSgufpiJbKFvR2j3pGbRcHkKjnWphAC",7.339e-05,0,-3.55,3.53,23.27,290.79,1038.59,7605.71,1,3,72,42,28683,73391,1789355026000,"UwKIHxLXta9dasF3",["twitter"],1],["brainrot","solana","raydium","TVvnJTedD3WgAPede2xUmRjweJqNdhCEgyjtKv3rCq4","The Sheeple Flock","SHEEPLE","AkM2Ua4ZJwkcjQ3dKiV2wMeiK1b1a9TaUXoWjf3c94Wr",0.0002736,1.28,6.4,-19.83,-8.06,1004.34,15353.94,45814.63,21,7,467,291,45390.95,273628,1789729309000,"VHbGMGGA0mtg5WNU",["twitter","telegram","tiktok","instagram","reddit"],1],["brainrot","solana","pumpswap","DsqWokHaPHi6p9TtkEFryf6qBQFxYkUiGss2sFnBpump","JUICE LEE","JUICELEE","D5Van4Ljtfkiysa5mMeRu6Xxd5aYTxzvrhMKRXgSZ1Aq",3.678e-05,0,0,-0.74,12.47,0,109.33,1652.83,0,0,17,29,16326.33,35539,1789675813000,"0n9wM1wR8p-1tP1_",["twitter","tiktok"],1],["ai","base","aerodrome","0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b","Virtual Protocol","VIRTUAL","0x21594b992F68495dD28d605834b58889d0a727c7",0.8534,-0.04,0.47,2.34,0.79,21191.91,40207.16,159926.3,91,61,343,253,4782021.4,561917717,1711899559000,"461f4a6b70979b82b7141adc522389c67043535a082d65accebf49013c798386",["twitter","telegram"],2],["ai","base","uniswap","0x3ec2156D4c0A9CBdAB4a016633b7BcF6a8d68Ea2","DebtReliefBot","DRB","0x5116773e18A9C7bB03EBB961b38678E45E238923",0.0002224,0.05,-0.33,-3.49,1.6,2962.03,48573.73,302530.73,4,8,2649,1641,1702984.93,21953296,1741341537000,"933f90e3132e6bf22153efc75938b732f0f1dc3a2fc2d9dbff614fe60ddf95b6",["twitter","telegram"],1],["ai","base","uniswap","0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b","BankrCoin","BNKR","0xAEC085E5A5CE8d96A7bDd3eB3A62445d4f6CE703",0.0004149,0,-0.31,0.73,-2.93,55971.17,59758.94,86082.87,116,149,296,363,2614223.11,40057664,1733201093000,"1064275a93238aa522eb369dd9d7b4980c75c41f12973ff403674e48129242e3",["twitter"],2],["ai","base","aerodrome","0x6B2504A03ca4D43d0D73776F6aD46dAb2F2a4cFD","Unit 00 - Rei","REI","0x34E3334E845d101205394e0Bd8821fDdc7Cd5559",0.01518,0,0.31,0.43,2.22,7121.17,81636.94,326883.55,25,2,559,124,1795748.11,15185571,null,"4d956034dfd299a9db58882217ffdc4b7d56a45bf9cb4e66e5a098d5dfff96bd",["twitter","telegram","discord"],2],["ai","base","aerodrome","0xeD664536023d8E4b1640C394777D34aBAFF1dF8F","Dolphin","POD","0x48C5D4a6677ED59646A9C6465db2562bE4a20AEC",0.7944,0,0.26,0.8,-6.89,2594.53,19000.23,386376.19,11,1,271,305,506999.54,66352689,null,"yvk1_wC6hGaydQGL",["twitter","telegram"],1],["ai","base","uniswap","0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825","aixbt by Virtuals","AIXBT","0x7464850CC1cFb54A2223229b77B1BCA2f888D946",0.02323,0,0,2.06,1.76,0,87.98,9933.33,0,0,63,72,1064908.99,23116352,1730525195000,"4a055ebd1f663f2b8564b0f02790d2e7a707facd1b5f0199c41e4ce680772354",["twitter","telegram"],2],["ai","base","aerodrome","0xFf8104251E7761163faC3211eF5583FB3F8583d6","REPPO","REPPO","0x71FE33676773DF7Cf9Ce14f640caE06823F083cC",0.01299,0,0.29,-1.03,-2.6,400.79,5829.76,24647.31,4,0,114,64,46129.94,5594521,null,"e2c038fa240b047dd98177c3dfd34d1d7a523ef736465abb4130100b4a0c3e13",["twitter","telegram","discord"],2],["ai","base","aerodrome","0x5576D6ed9181F2225afF5282Ac0ED29f755437Ea","OpenServ","SERV","0x3416f5Fa0adE2D3de6935d4B204d9fe0b68C0eA6",0.02214,0,0,-0.67,-5.58,0,4459.03,33412.91,0,0,22,41,881480.7,14616787,null,"72a602d972933184d8ad9d840e021f6c9807bb0a4466546128d0427ab2a6c1d6",["twitter","telegram","discord"],1],["ai","bsc","pancakeswap","0x9840652DC04fb9db2C43853633f0F62BE6f00f98","ChainGPT","CGPT","0x1E8D7AB96323953faC85ab687f5D38b45344e62d",0.02432,0.04,-0.11,0.13,4.1,6064.4,64237.67,281794.94,46,44,1540,1727,1049283.07,24269663,1701468950000,"b0c5158cafbcd2bd0ebcfb6a2ce6ecc2405af70f6460eb829b2b929fcef219f1",["twitter","telegram","discord"],3],["ai","ethereum","uniswap","0x8390a1DA07E376ef7aDd4Be859BA74Fb83aA02D5","GROK","GROK","0x69c66BeAfB06674Db41b22CFC50c34A93b8d82a2",0.0005837,0,-0.28,-3.48,0,0,3453.7,10506.17,0,0,11,23,993776.05,3848862,1699071695000,"19ac2da068979dad41d54e7079d7f7b82ca89c28413a05d128936a549ee0a26f",["twitter","telegram","tiktok","instagram"],1],["ai","solana","raydium","GJAFwWjJ3vnTsrQVabjBVK2TYB1YtRCQXRDfDgUnpump","Act I : The AI Prophecy","ACT","B4PHSkL6CeZbxVqm1aUPQuVpc5ERFcaZj7u9dhtphmVX",0.01117,-0.23,0.3,3.25,5.04,4045.26,48407.75,2767730.18,36,103,21279,18986,1625646.54,10599492,1729337799000,"14201087ebafd2b8ca5c3242ddfd4e6cb0824b539ad0736ebea5ec03edefd214",["twitter","telegram","discord"],1],["ai","solana","orca","HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC","ai16z","AI16Z","AwRjXenxTTiHnLZe56iwxNGrWZn1bZMSE6QsvjCSPsGA",0.0005593,0,6.85,11.88,53.86,547.54,15023.76,77136.33,14,2,1115,773,17949.79,615234,1739754894000,"f88abc595c9b7385c582d97f9a113c8339f51ffc46d4bf25b96e49723b30e2da",["twitter","telegram","discord"],1],["ai","solana","raydium","Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs","Grass","GRASS","GTJ2S27UL7yZ3TdTwpKjfNcxeEZRkRPHjpj5Fubwb8Mk",0.7462,-0.6,-1.14,4.08,7.01,678.5,3817.74,9909.21,89,150,1875,1695,571390.48,522015300,1730125547000,"e76ab3c74a385a90ce2f77f9fc95a135d37671b782e4beea1268c604d6276d15",["twitter","discord"],1],["ai","solana","meteora","61V8vBaqAGMpgDQi4JcAwo1dmBGHsyhzodcPqnEVpump","AI Rig Complex","ARC","DW2QC5ychRKmA3YpY6eWetxt1YdMK8hir3vNjNjRW6i9",0.07041,0,0,1.21,-3.73,154.05,504.68,4207.22,5,4,142,107,10149421.99,70414498,1737132291000,"952429eb5f770cb20d90492e438aa92bf61d33fa6aaaeca0186d2862d68fc21c",["twitter","telegram"],2],["ai","bsc","pancakeswap","0x997A58129890bBdA032231A52eD1ddC845fc18e1","SIREN","SIREN","0xb2AF49dBF526054FAf19602860A5E298a79F3D05",0.02253,0,0.55,0.57,-0.33,869.24,6030.66,15929.53,17,3,106,48,2281910.18,16306609,1739046234000,"963bdb50c2617cb465b72d53ad0df21b84f7d1eeb2c2c5a9e61761a9d21b6b3a",["twitter","telegram"],1]];
+const META_SNAP=[['meme-hall-of-fame','Meme Hall of Fame',60,5089867339,26660492.46,-0.02],['ai','AI',70,2530359778,29468439.97,1.56],['dog','Dog',77,1269391476,32661473.87,-2.93],['cat','Cat',101,766754133,17605151.58,-0.73],['trump','Trump',6,5893462330,11038714.17,0.53],['character','Character',38,2852462517,11730242,0.27],['degen','Degen',30,994474451,9830908.19,0.36],['nft','NFT',10,1058813155,17861517.33,3.29],['chinese','Chinese',60,704763344,13837605.49,0.16],['stonks','Stonks',16,601471529,11363152.93,-2.41],['celebrity','Celebrity',7,635427652,10801026.44,0.25],['brainrot','Brainrot',31,10092797,806113.24,-6.6],['internet-animals','Internet Animals',39,110668015,638379.2,0.39],['elon-musk','Elon Musk',42,56881793,300367.83,0.87],['tiktok','TikTok',37,15417249,430423.78,-6.78],['slang','Slang',10,47261635,945238.97,3.81],['x402','x402',16,141010144,2728395.91,0.5],['knockoff-legends','Knockoff Legends',26,4640892,71011.56,1.86]];
+const TAGS1={'ezkpqgsjtjmfqkz9kqansqyxrcf8fbopzlhyxdm65zcjm':'meme-hall-of-fame','dezxaz8z7pnrnrjjz3wxborgixca6xjnb7yab1ppb263':'meme-hall-of-fame','7gcihgdb8fe6knjn2mytkzzcrjqy3t9ghdc8uhymw2hr':'meme-hall-of-fame','0x6982508145454ce325ddbe47a25d4ec3d2311933':'meme-hall-of-fame','0xe0f63a424a4439cbe457d80e4f4b51ad25b2c56c':'meme-hall-of-fame','0x532f27101965dd16442e59d40670faf5ebb142e4':'meme-hall-of-fame','czlsujwblfssjncfkh59rufqvafwcy5tzedwjsuypump':'ai'};
+
+function fromSnap(r){
+  const [chain,addr,name,sym,dex,pair,price,c5,c1,c6,c24,v5,v1,v6,v24,b5,s5,b1,s1,b24,s24,liq,fdv,mc,created,img,soc,web,boost]=r;
+  return mk({chain,addr,name,sym,dex,pair,price,ch:{m5:c5,h1:c1,h6:c6,h24:c24},vol:{m5:v5,h1:v1,h6:v6,h24:v24},tx:{m5:{buys:b5,sells:s5},h1:{buys:b1,sells:s1},h24:{buys:b24,sells:s24}},liq,fdv,mc,created,img,soc,web,boost,tags:TAGS1[addr.toLowerCase()]?[TAGS1[addr.toLowerCase()]]:[]});
+}
+function fromSnap2(r){
+  const [tag,chain,dex,addr,name,sym,pair,price,m5,h1,h6,h24,v1,v6,v24,b1,s1,b24,s24,liq,mc,created,img,soc,web]=r;
+  return mk({chain,addr,name,sym,dex,pair,price,ch:{m5,h1,h6,h24},vol:{m5:0,h1:v1,h6:v6,h24:v24},tx:{m5:{buys:0,sells:0},h1:{buys:b1,sells:s1},h24:{buys:b24,sells:s24}},liq,fdv:mc,mc,created,img,soc,web,boost:0,tags:[tag]});
+}
+function mk(o){
+  const id=o.chain+':'+o.addr.toLowerCase();
+  return {id,chain:o.chain,addr:o.addr,name:o.name,sym:String(o.sym).replace(/^\$/,''),dex:o.dex,pair:o.pair,url:'https://dexscreener.com/'+o.chain+'/'+String(o.pair).toLowerCase(),price:o.price,ch:o.ch,vol:o.vol,tx:o.tx,liq:o.liq||0,fdv:o.fdv||0,mc:o.mc||0,created:o.created||null,
+    img:o.img?'https://cdn.dexscreener.com/cms/images/'+o.img+'?width=128&height=128&quality=90&format=auto':'',socials:(o.soc||[]).map(t=>({type:t,url:''})),webs:o.web?[{url:''}]:[],boost:o.boost||0,blue:blueSet.has(id),tags:o.tags||[]};
+}
+function fromPair(p,tag){
+  const chain=p.chainId,addr=p.baseToken.address,info=p.info||{},id=chain+':'+addr.toLowerCase();
+  return {id,chain,addr,name:p.baseToken.name,sym:(p.baseToken.symbol||'').replace(/^\$/,''),dex:p.dexId,pair:p.pairAddress,url:p.url,
+    price:+p.priceUsd||0,ch:Object.assign({m5:0,h1:0,h6:0,h24:0},p.priceChange||{}),vol:Object.assign({m5:0,h1:0,h6:0,h24:0},p.volume||{}),
+    tx:Object.assign({m5:{buys:0,sells:0},h1:{buys:0,sells:0},h24:{buys:0,sells:0}},p.txns||{}),
+    liq:(p.liquidity&&p.liquidity.usd)||0,fdv:p.fdv||0,mc:p.marketCap||p.fdv||0,created:p.pairCreatedAt||null,img:info.imageUrl||'',
+    socials:info.socials||[],webs:info.websites||[],boost:(p.boosts&&p.boosts.active)||0,blue:blueSet.has(id),tags:tag?[tag]:[]};
+}
+
+/* scoring + safety */
+function parts(t){
+  const v1=t.vol.h1||0,v24=t.vol.h24||0,spike=v24>0?v1*24/v24:0;
+  const b=t.tx.h1.buys||0,s=t.tx.h1.sells||0,bs=b+s,b24=t.tx.h24.buys||0,s24=t.tx.h24.sells||0,ratio=bs>=10?b/bs:b24/Math.max(1,b24+s24);
+  const act=(b24+s24)>0?bs*24/(b24+s24):0,depth=t.mc>0?t.liq/t.mc:0,comm=Math.min(3,t.socials.length)+(t.webs.length?1:0);
+  return [
+    {k:'Volume spike',v:clamp((spike-1)/3)*25,m:25,d:v24?spike.toFixed(1)+'× its normal hour':'No volume'},
+    {k:'Buy pressure',v:clamp((ratio-.5)/.25)*20,m:20,d:Math.round(ratio*100)+'% buys'},
+    {k:'Trade activity',v:clamp((act-1)/2)*15,m:15,d:bs+' trades last hour'},
+    {k:'Momentum',v:clamp((t.ch.h1||0)/15)*7+clamp((t.ch.h6||0)/40)*8,m:15,d:pct(t.ch.h1)+' 1h, '+pct(t.ch.h6)+' 6h'},
+    {k:'Liquidity depth',v:clamp(depth/.1)*15,m:15,d:(depth*100).toFixed(1)+'% of market cap'},
+    {k:'Community',v:Math.min(10,comm*2+(t.boost?3:0)),m:10,d:t.socials.length+' socials'+(t.webs.length?', website':'')+(t.boost?', boosted':'')},
+  ];
+}
+const scoreCache=new WeakMap();
+function score(t){if(scoreCache.has(t))return scoreCache.get(t);let s=parts(t).reduce((a,p)=>a+p.v,0);if((t.ch.h24||0)<-80||t.liq<5000)s*=.5;s=Math.round(s);scoreCache.set(t,s);return s}
+function checks(t){
+  const h=ageH(t),b=t.tx.h1.buys||0,s=t.tx.h1.sells||0,depth=t.mc>0?t.liq/t.mc:0,curve=onCurve(t);
+  return [
+    curve?{ok:false,lvl:'mid',k:'Still on the pump.fun bonding curve',d:'Not graduated'}:{ok:t.liq>=25000,lvl:'high',k:'Liquidity over $25K',d:fmtUSD(t.liq)},
+    {ok:(t.ch.h24||0)>-50,lvl:'high',k:'Not crashing (24h above −50%)',d:pct(t.ch.h24)},
+    curve?null:{ok:depth>=.03,lvl:'mid',k:'Pool at least 3% of market cap',d:(depth*100).toFixed(1)+'%'},
+    {ok:h==null||h>=24,lvl:'mid',k:'Pair older than 24 hours',d:ageTxt(t)},
+    {ok:!(s>20&&s>b*2),lvl:'mid',k:'No heavy selling last hour',d:b+' buys / '+s+' sells'},
+    {ok:t.socials.length>0||t.webs.length>0,lvl:'low',k:'Has website or socials',d:t.socials.length+t.webs.length?'Yes':'None'},
+  ].filter(Boolean);
+}
+function risk(t){const c=checks(t),hi=c.filter(x=>!x.ok&&x.lvl==='high').length,mid=c.filter(x=>!x.ok&&x.lvl==='mid').length;return hi?{lv:'high',t:'High'}:mid?{lv:'med',t:'Medium'}:{lv:'low',t:'Low'}}
+const scoreColor=s=>s>=65?'var(--up)':s>=40?'var(--accent)':'var(--faint)';
+
+/* state */
+const store=new Map(),hist=new Map(),boosted=new Set();
+let metas=META_SNAP.map(([slug,name,count,mc,vol,ch])=>({slug,name,count,mc,vol,ch}));
+let mode='connecting',lastUpdate=0,timer=null,discoverAt=0,searchHits=null,searchSeq=0,tracked=[];
+let me=S.get('ms_me',null),session=S.get('ms_session',null);
+let plan=WHOP_CLIENT_ID?((me&&me.plan)||'free'):S.get('ms_plan','free');const paid=()=>plan!=='free';
+let page='home',chain='all',subf='all',sortKey='score',sortDir=-1,q='',limit=50,metaSlug=null;
+let watch=new Set(S.get('ms_watch',[])),alerts=S.get('ms_alerts',[]),alertLog=S.get('ms_alog',[]),unread=0;
+
+const PAGES=[
+  {id:'home',t:'Home'},
+  {id:'all',t:'All coins',s:'Every coin Moonscope tracks, ranked by Signal Score. Tap a column to sort.',sort:'score'},
+  {id:'pump',t:'Pump.fun',cls:'pf',s:'Coins launched on pump.fun. "On curve" coins are still on the bonding curve; "Graduated" coins have moved to a full trading pool.',sort:'score',subs:[['all','All'],['curve','On curve'],['grad','Graduated']]},
+  {id:'new',t:'New',s:'Newest pairs first. New coins carry the most risk, so check the safety flags.',sort:'age',dir:1},
+  {id:'gainers',t:'Gainers',s:'Biggest 24-hour moves among coins with at least $10K liquidity. Big pumps often reverse.',sort:'ch24'},
+  {id:'top',t:'Top memes',s:'Established memecoins ranked by market cap.',sort:'mc'},
+  {id:'narratives',t:'Narratives',s:'Coins grouped by theme.'},
+  {id:'watch',t:'Watchlist',s:'Coins you starred.',sort:'score'},
+];
+
+/* ---------- data ---------- */
+async function getJSON(url,ms=8000){const c=new AbortController(),to=setTimeout(()=>c.abort(),ms);try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(to)}}
+function absorb(pairs,tag){
+  const best=new Map();
+  (pairs||[]).forEach(p=>{if(!p||!p.baseToken||!p.priceUsd)return;const t=fromPair(p,tag);const c=best.get(t.id);if(!c||t.liq>c.liq)best.set(t.id,t)});
+  best.forEach((t,id)=>{const old=store.get(id);if(old){t.prev=old.price;t.tags=[...new Set([...(old.tags||[]),...t.tags])]}store.set(id,t);const h=hist.get(id)||[];h.push({t:Date.now(),p:t.price});if(h.length>240)h.shift();hist.set(id,h)});
+  return best.size;
+}
+async function discover(){
+  const res=await Promise.allSettled([getJSON(API+'/token-boosts/top/v1'),getJSON(API+'/token-boosts/latest/v1'),getJSON(API+'/token-profiles/latest/v1'),getJSON(API+'/community-takeovers/latest/v1'),getJSON(API+'/metas/trending/v1')]);
+  if(res.every(r=>r.status==='rejected'))throw new Error('offline');
+  const want=new Map();BLUE.forEach(([c,a])=>want.set(c+':'+a.toLowerCase(),[c,a]));
+  res.slice(0,4).forEach((r,i)=>{if(r.status!=='fulfilled'||!Array.isArray(r.value))return;r.value.slice(0,80).forEach(x=>{if(!x.chainId||!x.tokenAddress)return;const id=x.chainId+':'+x.tokenAddress.toLowerCase();want.set(id,[x.chainId,x.tokenAddress]);if(i<2)boosted.add(id)})});
+  const m=res[4];if(m.status==='fulfilled'&&Array.isArray(m.value)&&m.value.length)metas=m.value.slice(0,18).map(x=>({slug:x.slug,name:x.name,count:x.tokenCount||0,mc:x.marketCap||0,vol:x.volume||0,ch:(x.marketCapChange&&x.marketCapChange.h24)||0}));
+  watch.forEach(id=>{const [c,a]=id.split(':');if(c&&a)want.set(id,[c,a])});
+  discoverAt=Date.now();return [...want.values()];
+}
+async function refreshLive(){
+  if(!tracked.length||Date.now()-discoverAt>120000){tracked=await discover();
+    // pump.fun + top-meme feeds through DexScreener themes
+    const feeds=await Promise.allSettled([getJSON(API+'/metas/meta/v1/meme-hall-of-fame'),getJSON(API+'/latest/dex/search?q=pump')]);
+    if(feeds[0].status==='fulfilled')absorb(feeds[0].value.pairs,'meme-hall-of-fame');
+    if(feeds[1].status==='fulfilled')absorb((feeds[1].value.pairs||[]).filter(p=>p.chainId==='solana'&&(p.dexId==='pumpfun'||p.dexId==='pumpswap')));}
+  const by={};tracked.forEach(([c,a])=>(by[c]=by[c]||[]).push(a));
+  const calls=[];Object.entries(by).forEach(([c,l])=>{for(let i=0;i<l.length;i+=30)calls.push(getJSON(API+'/tokens/v1/'+c+'/'+l.slice(i,i+30).join(',')))});
+  const out=await Promise.allSettled(calls);let n=0;
+  out.forEach(r=>{if(r.status==='fulfilled')n+=absorb(Array.isArray(r.value)?r.value:r.value.pairs)});
+  if(!n&&!store.size)throw new Error('no data');
+  lastUpdate=Date.now();
+}
+function loadSnapshot(){SNAP.forEach(r=>{const t=fromSnap(r);store.set(t.id,t);if(t.boost)boosted.add(t.id)});SNAP2.forEach(r=>{const t=fromSnap2(r);if(!store.has(t.id))store.set(t.id,t);else store.get(t.id).tags.push(r[0])});lastUpdate=SNAP_AT}
+const interval=()=>paid()?15000:60000;
+async function tick(){
+  try{await refreshLive();mode='live'}catch(e){if(mode!=='live'){if(!store.size)loadSnapshot();mode='snapshot'}}
+  updateStatus();render();renderTicker();checkAlerts();if(openId)openDrawer(openId,true);
+  clearTimeout(timer);if(mode==='live')timer=setTimeout(tick,interval());
+}
+function updateStatus(){
+  $('#status').className='status '+(mode==='live'?'live':'snap');
+  $('#statusText').innerHTML=mode==='live'?`<b>Live</b> · ${store.size} coins · updated <span id="upd">${ago(lastUpdate)}</span> · refreshes every ${interval()/1000}s`:
+    `<b>Real DexScreener data from Oct 6, 2026</b> · ${store.size} coins. Live prices are blocked inside this preview and turn on by themselves once Moonscope is on its own website.`;
+}
+setInterval(()=>{const u=$('#upd');if(u)u.textContent=ago(lastUpdate)},5000);
+
+/* ---------- navigation ---------- */
+function navHTML(){return PAGES.map(p=>`<button data-page="${p.id}" class="${p.cls||''}" ${page===p.id?'aria-current="page"':''}>${p.t}${p.id==='watch'&&watch.size?` <span class="num" style="color:var(--muted)">${watch.size}</span>`:''}</button>`).join('')}
+function renderNav(){$('#pages').innerHTML=navHTML();$('#mpages').innerHTML=navHTML()}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b){go(b.dataset.page,b.dataset.meta)}});
+function go(p,meta){
+  page=p;metaSlug=meta||null;subf='all';limit=50;searchHits=null;q='';$('#q').value='';
+  const pg=PAGES.find(x=>x.id===p);if(pg&&pg.sort){sortKey=pg.sort;sortDir=pg.dir||-1}
+  if(p==='narratives'&&metaSlug){sortKey='score';sortDir=-1;loadMeta(metaSlug)}
+  try{history.replaceState(null,'','#'+p)}catch(_){}
+  render();window.scrollTo({top:0});
+}
+async function loadMeta(slug){if(mode!=='live')return;try{const r=await getJSON(API+'/metas/meta/v1/'+encodeURIComponent(slug));absorb(r.pairs,slug);render()}catch(_){}}
+
+/* search */
+let sTimer;
+$('#q').addEventListener('input',e=>{q=e.target.value.trim();clearTimeout(sTimer);
+  if(q&&page==='home'){page='all';sortKey='score';sortDir=-1}
+  if(mode==='live'&&q.length>=2){sTimer=setTimeout(async()=>{const my=++searchSeq;try{const r=await getJSON(API+'/latest/dex/search?q='+encodeURIComponent(q));if(my!==searchSeq)return;
+    const best=new Map();(r.pairs||[]).forEach(p=>{if(!p.baseToken)return;const t=fromPair(p);const c=best.get(t.id);if(!c||t.liq>c.liq)best.set(t.id,t)});searchHits=[...best.values()];render()}catch(_){}},350)}
+  else searchHits=null;render()});
+document.addEventListener('keydown',e=>{if(e.key==='/'&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$('#q').focus()}if(e.key==='Escape'){closeDrawer();closeModals()}});
+
+/* ---------- shared bits ---------- */
+function avHTML(t,lg){return `<span class="av${lg?' lg':''}" style="background:${avColor(t.sym||'?')}">${t.img?`<img src="${esc(t.img)}" alt="" loading="lazy" data-fb="${esc((t.sym||'?').slice(0,2))}">`:esc((t.sym||'?').slice(0,2))}</span>`}
+document.addEventListener('error',e=>{const im=e.target;if(im.tagName==='IMG'&&im.dataset.fb!=null){const s=document.createElement('span');s.textContent=im.dataset.fb;im.replaceWith(s)}},true);
+const ring=s=>`<span class="ring" style="--p:${s};--c:${scoreColor(s)}"><b>${s}</b></span>`;
+const all=()=>[...store.values()];
+
+/* ---------- home ---------- */
+function card(t){const s=score(t),r=risk(t);
+  return `<button class="ccard" data-open="${esc(t.id)}"><div class="chead">${avHTML(t)}<div><span class="s">${esc(t.sym)}</span><span class="n">${esc(t.name)}</span></div>${ring(s)}</div>
+   <div class="cprice"><span class="p">${fmtPrice(t.price)}</span><span class="num ${cls(t.ch.h24)}">${pct(t.ch.h24)}</span></div>
+   <div class="cmeta"><span>MC <b>${fmtUSD(t.mc)}</b></span><span>Liq <b>${fmtUSD(t.liq)}</b></span></div>
+   <div class="cfoot"><span class="chain">${esc(chainName(t.chain))}${isPump(t)?' · pump.fun':''}</span><span class="risk ${r.lv}">${r.t} risk</span></div></button>`}
+function lrow(t,i,right){return `<button class="lrow" data-open="${esc(t.id)}"><span class="rk">${i+1}</span><span class="who">${avHTML(t)}<span><b>${esc(t.sym)}</b><small>${esc(t.name)}</small></span></span>${right(t)}</button>`}
+function renderHome(){
+  const a=all();if(!a.length){$('#home').innerHTML='';return}
+  const sc=a.map(score),avg=sc.reduce((x,y)=>x+y,0)/sc.length,vol=a.reduce((x,t)=>x+(t.vol.h24||0),0);
+  const heat=avg>=55?'Hot':avg>=40?'Warm':avg>=25?'Cool':'Cold';
+  const pumps=a.filter(isPump);
+  const hot=[...a].filter(t=>t.liq>=10000).sort((x,y)=>score(y)-score(x)).slice(0,8);
+  const fresh=[...pumps].sort((x,y)=>(y.created||0)-(x.created||0)).slice(0,8);
+  const gain=[...a].filter(t=>t.liq>=10000).sort((x,y)=>(y.ch.h24||0)-(x.ch.h24||0)).slice(0,6);
+  const lose=[...a].filter(t=>t.liq>=10000).sort((x,y)=>(x.ch.h24||0)-(y.ch.h24||0)).slice(0,6);
+  const top=[...a].sort((x,y)=>y.mc-x.mc).slice(0,10);
+  const r24=t=>`<span class="r"><span class="${cls(t.ch.h24)}">${pct(t.ch.h24)}</span><small>${fmtPrice(t.price)}</small></span><span class="r">${ring(score(t))}</span>`;
+  $('#home').innerHTML=`
+  <div class="hero">
+    <div class="pcard"><small>Meme market heat</small><b>${heat} · ${Math.round(avg)}</b><div class="heat"><i style="left:${clamp(avg/80)*100}%"></i></div></div>
+    <div class="pcard"><small>Coins tracked</small><b>${a.length}</b><span class="flat">${pumps.length} from pump.fun</span></div>
+    <div class="pcard"><small>24h volume tracked</small><b>${fmtUSD(vol)}</b><span class="flat">across ${new Set(a.map(t=>t.chain)).size} chains</span></div>
+    <div class="pcard"><small>Flagged high risk</small><b class="down">${a.filter(t=>risk(t).lv==='high').length}</b><span class="flat">by the safety check</span></div>
+  </div>
+  <div class="sec"><div class="sech"><div><h2>Hot right now</h2><p>Highest Signal Scores with at least $10K liquidity.</p></div><button class="more" data-page="all">All coins →</button></div><div class="cards">${hot.map(card).join('')}</div></div>
+  <div class="sec"><div class="sech"><div><h2>Fresh on pump.fun <span class="pill">PUMP.FUN</span></h2><p>Newest pump.fun launches Moonscope is tracking.</p></div><button class="more" data-page="pump">Pump.fun page →</button></div><div class="cards">${fresh.map(card).join('')}</div></div>
+  <div class="sec cols2">
+    <div><div class="sech"><div><h2>Top gainers</h2><p>24 hours, $10K+ liquidity.</p></div><button class="more" data-page="gainers">See all →</button></div><div class="box">${gain.map((t,i)=>lrow(t,i,r24)).join('')}</div></div>
+    <div><div class="sech"><div><h2>Biggest drops</h2><p>24 hours, $10K+ liquidity.</p></div></div><div class="box">${lose.map((t,i)=>lrow(t,i,r24)).join('')}</div></div>
+  </div>
+  <div class="sec"><div class="sech"><div><h2>Trending narratives</h2><p>Themes the market is trading. Tap one to see its coins.</p></div><button class="more" data-page="narratives">All narratives →</button></div>
+    <div class="metas">${metas.slice(0,12).map(m=>`<button class="meta" data-page="narratives" data-meta="${esc(m.slug)}"><b>${esc(m.name)}</b><small>${m.count} coins · ${fmtUSD(m.mc)}</small><span class="num ${cls(m.ch)}">${pct(m.ch)} 24h</span></button>`).join('')}</div></div>
+  <div class="sec"><div class="sech"><div><h2>Top memecoins</h2><p>By market cap.</p></div><button class="more" data-page="top">See all →</button></div>
+    <div class="box">${top.map((t,i)=>lrow(t,i,t=>`<span class="r">${fmtUSD(t.mc)}<small>market cap</small></span><span class="r"><span class="${cls(t.ch.h24)}">${pct(t.ch.h24)}</span><small>${fmtPrice(t.price)}</small></span>`)).join('')}</div></div>
+  ${paid()?'':`<div class="sec cta"><div><h3>Get pinged before the pump, not after</h3><p>Pro adds 15-second prices, alerts on price, score and 1-hour pumps, and an unlimited watchlist.</p></div><button class="btn pro" id="ctaPro">See plans</button></div>`}`;
+  const c=$('#ctaPro');if(c)c.onclick=()=>openModal('pricing');
+}
+$('#home').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b)openDrawer(b.dataset.open)});
+
+/* ---------- list pages ---------- */
+const COLS=[
+  {k:'rank',l:'#',cls:'l rank'},
+  {k:'name',l:'Coin',cls:'l'},
+  {k:'age',l:'Age',s:t=>{const h=ageH(t);return h==null?1e9:h},x:1},
+  {k:'price',l:'Price',s:t=>t.price},
+  {k:'ch1',l:'1h',s:t=>t.ch.h1||0,x:1},
+  {k:'ch24',l:'24h',s:t=>t.ch.h24||0},
+  {k:'mc',l:'Market cap',s:t=>t.mc,x:1},
+  {k:'liq',l:'Liquidity',s:t=>t.liq,x:1},
+  {k:'vol',l:'Volume 24h',s:t=>t.vol.h24||0,x:1},
+  {k:'bs',l:'Buys / sells 1h',s:t=>{const b=t.tx.h1.buys||0,s=t.tx.h1.sells||0;return b+s?b/(b+s):.5},x:1},
+  {k:'score',l:'Signal',s:t=>score(t)},
+  {k:'risk',l:'Risk',s:t=>({low:0,med:1,high:2})[risk(t).lv],x:1},
+];
+$('#chains').innerHTML=['all','solana','base','ethereum','bsc'].map(k=>`<button data-chain="${k}" aria-pressed="${k==='all'}">${k==='all'?'All chains':`<span class="cdot" style="background:${CHAINS[k].c}"></span>${CHAINS[k].n}`}</button>`).join('');
+$('#chains').addEventListener('click',e=>{const b=e.target.closest('[data-chain]');if(!b)return;chain=b.dataset.chain;document.querySelectorAll('#chains button').forEach(x=>x.setAttribute('aria-pressed',x===b));limit=50;render()});
+$('#sub').addEventListener('click',e=>{const b=e.target.closest('[data-sub]');if(!b)return;subf=b.dataset.sub;limit=50;render()});
+['minLiq','mcap','hideRisk'].forEach(id=>$('#'+id).addEventListener('change',()=>{limit=50;render()}));
+$('#reset').onclick=()=>{$('#minLiq').value='0';$('#mcap').value='0-';$('#hideRisk').checked=false;chain='all';document.querySelectorAll('#chains button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.chain==='all'));q='';$('#q').value='';searchHits=null;render()};
+$('#thead').addEventListener('click',e=>{const th=e.target.closest('[data-sort]');if(!th)return;const k=th.dataset.sort;if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=k==='age'?1:-1}render()});
+$('#moreBtn').onclick=()=>{limit+=50;render()};
+function list(){
+  const minL=+$('#minLiq').value,[lo,hi]=$('#mcap').value.split('-').map(x=>x===''?Infinity:+x),hide=$('#hideRisk').checked;
+  let a=searchHits&&q?searchHits:all();
+  if(!(searchHits&&q)){
+    if(page==='pump'){a=a.filter(isPump);if(subf==='curve')a=a.filter(onCurve);if(subf==='grad')a=a.filter(t=>!onCurve(t))}
+    if(page==='gainers')a=a.filter(t=>t.liq>=10000);
+    if(page==='top')a=a.filter(t=>t.mc>=1e6&&ageH(t)!=null?ageH(t)>24*30:t.mc>=1e6);
+    if(page==='watch')a=a.filter(t=>watch.has(t.id));
+    if(page==='narratives'&&metaSlug)a=a.filter(t=>(t.tags||[]).includes(metaSlug));
+    if(q){const s=q.toLowerCase();a=a.filter(t=>t.name.toLowerCase().includes(s)||t.sym.toLowerCase().includes(s)||t.addr.toLowerCase()===s)}
+  }
+  a=a.filter(t=>(chain==='all'||t.chain===chain)&&t.liq>=minL&&t.mc>=(lo||0)&&t.mc<=hi&&(!hide||risk(t).lv!=='high'));
+  const col=COLS.find(c=>c.k===sortKey);if(col&&col.s)a.sort((x,y)=>(col.s(x)-col.s(y))*sortDir);
+  return a;
+}
+function renderList(){
+  const pg=PAGES.find(p=>p.id===page),m=metaSlug&&metas.find(x=>x.slug===metaSlug);
+  $('#lTitle').textContent=searchHits&&q?`Search: “${q}”`:q?`“${q}” in ${pg.t}`:m?m.name:pg.t;
+  $('#lSub').textContent=searchHits&&q?'Results from every chain on DexScreener.':m?`${m.count} coins in this theme · ${fmtUSD(m.mc)} total market cap · ${pct(m.ch)} 24h.`:pg.s;
+  const sb=$('#sub');if(pg.subs&&!(searchHits&&q)){sb.hidden=false;sb.innerHTML=pg.subs.map(([k,l])=>`<button data-sub="${k}" aria-pressed="${subf===k}">${l}</button>`).join('')}else sb.hidden=true;
+  $('#thead').innerHTML=COLS.map(c=>`<th class="${c.cls||''} ${c.x?'xs-hide':''}" ${c.s?`data-sort="${c.k}"`:''} scope="col">${c.l}${sortKey===c.k?` <span class="arr">${sortDir<0?'↓':'↑'}</span>`:''}</th>`).join('');
+  if(mode==='connecting'){$('#rows').innerHTML=`<tr><td colspan="${COLS.length}"><div class="empty"><b>Loading coins…</b></div></td></tr>`;return}
+  const a=list();$('#count').textContent=a.length+' coins';
+  if(!a.length){const w=page==='watch'&&!q;const ml=page==='narratives'&&metaSlug&&mode!=='live';
+    $('#rows').innerHTML=`<tr><td colspan="${COLS.length}"><div class="empty"><b>${w?'Your watchlist is empty':ml?'This theme loads with live data':'No coins match'}</b>${w?'Tap the star next to any coin to track it here.':ml?'Once Moonscope is on its own website, every coin in this narrative loads here.':'Try another chain, clear the search, or loosen the filters.'}</div></td></tr>`;$('#pager').hidden=true;return}
+  const shown=a.slice(0,limit);$('#pager').hidden=a.length<=limit;
+  $('#rows').innerHTML=shown.map((t,i)=>{
+    const s=score(t),r=risk(t),b=t.tx.h1.buys||0,se=t.tx.h1.sells||0,bs=b+se?b/(b+se):.5,fl=t.prev==null||t.prev===t.price?'':t.price>t.prev?'flash-up':'flash-down';
+    return `<tr data-id="${esc(t.id)}" tabindex="0">
+      <td class="l rank num">${i+1}</td>
+      <td class="l"><div class="tok"><button class="star${watch.has(t.id)?' on':''}" data-star="${esc(t.id)}" aria-label="${watch.has(t.id)?'Remove from':'Add to'} watchlist">${watch.has(t.id)?'★':'☆'}</button>${avHTML(t)}<div style="min-width:0"><div class="nm">${esc(t.sym)}${t.boost||boosted.has(t.id)?'<span title="Boosted on DexScreener" style="color:var(--accent)">⚡</span>':''}${isPump(t)?`<span class="pf-tag">${onCurve(t)?'CURVE':'PUMP'}</span>`:''}</div><div class="sub"><em>${esc(t.name)}</em><span class="chain">${esc(chainName(t.chain))}</span></div></div></div></td>
+      <td class="num xs-hide">${ageTxt(t)}</td>
+      <td class="num ${fl}">${fmtPrice(t.price)}</td>
+      <td class="num xs-hide ${cls(t.ch.h1)}">${pct(t.ch.h1)}</td>
+      <td class="num ${cls(t.ch.h24)}">${pct(t.ch.h24)}</td>
+      <td class="num xs-hide">${fmtUSD(t.mc)}</td>
+      <td class="num xs-hide">${onCurve(t)?'<span class="flat">curve</span>':fmtUSD(t.liq)}</td>
+      <td class="num xs-hide">${fmtUSD(t.vol.h24)}</td>
+      <td class="xs-hide"><span class="bsr"><span class="bar" title="${Math.round(bs*100)}% buys"><i style="width:${bs*100}%"></i></span><small class="num">${b} / ${se}</small></span></td>
+      <td>${ring(s)}</td>
+      <td class="xs-hide"><span class="risk ${r.lv}">${r.t}</span></td></tr>`}).join('');
+}
+function renderNarratives(){
+  $('#lTitle').textContent='Narratives';$('#lSub').textContent='Themes the market is trading right now, by DexScreener. Tap one to see its coins.';
+  $('#home').hidden=false;$('#list').hidden=true;
+  $('#home').innerHTML=`<div class="phead"><h1>Narratives</h1><p>Themes the market is trading right now. Tap one to see its coins.</p></div>
+   <div class="metas" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">${metas.map(m=>`<button class="meta" data-page="narratives" data-meta="${esc(m.slug)}"><b>${esc(m.name)}</b><small>${m.count} coins</small><small>Market cap ${fmtUSD(m.mc)}</small><small>Volume ${fmtUSD(m.vol)}</small><span class="num ${cls(m.ch)}">${pct(m.ch)} 24h</span></button>`).join('')}</div>`;
+}
+$('#rows').addEventListener('click',e=>{const st=e.target.closest('[data-star]');if(st){e.stopPropagation();toggleWatch(st.dataset.star);return}const tr=e.target.closest('tr[data-id]');if(tr)openDrawer(tr.dataset.id)});
+$('#rows').addEventListener('keydown',e=>{if(e.key==='Enter'){const tr=e.target.closest('tr[data-id]');if(tr)openDrawer(tr.dataset.id)}});
+
+function render(){
+  renderNav();
+  if(page==='home'&&!q){$('#home').hidden=false;$('#list').hidden=true;renderHome();return}
+  if(page==='narratives'&&!metaSlug&&!q){renderNarratives();return}
+  $('#home').hidden=true;$('#list').hidden=false;renderList();
+}
+function renderTicker(){
+  const top=all().filter(t=>t.liq>=10000).sort((a,b)=>Math.abs(b.ch.h1||0)-Math.abs(a.ch.h1||0)).slice(0,16);
+  const h=top.map(t=>`<button data-open="${esc(t.id)}" tabindex="-1"><b>${esc(t.sym)}</b><span class="num ${cls(t.ch.h1)}">${pct(t.ch.h1)} 1h</span></button>`).join('');
+  $('#tick').innerHTML=h+h;
+}
+$('#tick').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b)openDrawer(b.dataset.open)});
+
+function findTok(id){return store.get(id)||(searchHits||[]).find(t=>t.id===id)}
+function toggleWatch(id){
+  if(watch.has(id))watch.delete(id);
+  else{if(!paid()&&watch.size>=5){toast('The free watchlist holds 5 coins. Pro is unlimited.');openModal('pricing');return}
+    watch.add(id);const t=findTok(id);if(t&&!store.has(id))store.set(id,t);if(t&&!tracked.some(([c,a])=>c+':'+a.toLowerCase()===id))tracked.push([t.chain,t.addr]);toast('Added to watchlist')}
+  S.set('ms_watch',[...watch]);render();if(openId===id)openDrawer(id,true)}
+
+/* ---------- drawer ---------- */
+let openId=null;
+const SOC={twitter:'X',telegram:'Telegram',discord:'Discord',instagram:'Instagram',tiktok:'TikTok',reddit:'Reddit'};
+function changeBars(t){
+  const ks=[['m5','5m'],['h1','1h'],['h6','6h'],['h24','24h']],vals=ks.map(([k])=>t.ch[k]||0),L=v=>Math.log10(1+Math.abs(v)),mx=Math.max(L(10),...vals.map(L));
+  return `<div class="chg">${ks.map(([k,l],i)=>{const v=vals[i],h=Math.max(2,L(v)/mx*100),col=v>=0?'var(--up)':'var(--down)';
+    return `<div class="col"><span class="v ${cls(v)}">${pct(v)}</span><div class="area"><div class="half hpos">${v>=0?`<i class="bar" style="height:${h}%;background:${col}"></i>`:''}</div><div class="half hneg">${v<0?`<i class="bar" style="height:${h}%;background:${col}"></i>`:''}</div></div><span class="k">${l}</span></div>`}).join('')}</div>`;
+}
+function openDrawer(id,refresh){
+  const t=findTok(id);if(!t)return;openId=id;
+  const d=$('#drawer'),keep=refresh?d.scrollTop:0,s=score(t),r=risk(t),h=hist.get(id)||[];
+  const socials=t.socials.filter(x=>x.url).map(x=>`<a class="btn sm" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(SOC[x.type]||x.type)}</a>`).join('');
+  const webs=t.webs.filter(x=>x.url).slice(0,1).map(x=>`<a class="btn sm" href="${esc(x.url)}" target="_blank" rel="noopener">Website</a>`).join('');
+  const my=alerts.filter(a=>a.id===id);
+  d.innerHTML=`
+  <div class="dhead">${avHTML(t,1)}<div style="min-width:0"><h2>${esc(t.name)}</h2><div style="color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap">$${esc(t.sym)}<span class="chain">${esc(chainName(t.chain))}</span>${isPump(t)?`<span class="pf-tag">${onCurve(t)?'ON CURVE':'PUMP.FUN'}</span>`:''}<span>${esc(t.dex)} · ${ageTxt(t)} old</span></div></div><button class="x" id="dClose" aria-label="Close details">✕</button></div>
+  <div class="price"><span class="p">${fmtPrice(t.price)}</span><span class="num ${cls(t.ch.h24)}">${pct(t.ch.h24)} 24h</span><span class="num ${cls(t.ch.h1)}">${pct(t.ch.h1)} 1h</span></div>
+  <div class="links"><a class="btn sm pro" href="${esc(t.url)}" target="_blank" rel="noopener">Chart &amp; trade</a>${isPump(t)?`<a class="btn sm" href="https://pump.fun/coin/${esc(t.addr)}" target="_blank" rel="noopener">pump.fun</a>`:''}${t.chain==='solana'?`<a class="btn sm" href="https://rugcheck.xyz/tokens/${esc(t.addr)}" target="_blank" rel="noopener">RugCheck</a>`:''}${socials}${webs}<a class="btn sm" id="shareX" href="#" target="_blank" rel="noopener">Share on X</a></div>
+  <div class="addr"><span>${esc(t.addr)}</span><button class="btn sm" id="copyA">Copy</button></div>
+  <div class="card"><h3>Price change <span class="note" style="text-transform:none;letter-spacing:0">bar height on a log scale</span></h3>${changeBars(t)}</div>
+  ${mode==='live'?(paid()&&h.length>=3?`<div class="card"><h3>Live price <span class="num" style="text-transform:none">${h.length} updates</span></h3><div class="chartbox" id="cbox"><canvas id="pc"></canvas><div class="tip" id="tip" hidden></div></div></div>`:'')+(plan==='whale'?`<div class="card"><h3>Candlestick chart</h3><iframe class="embed" src="https://dexscreener.com/${esc(t.chain)}/${esc(t.pair)}?embed=1&theme=dark&info=0&trades=0" title="Chart for ${esc(t.sym)}" loading="lazy"></iframe></div>`:''):''}
+  <div class="card"><h3>Signal score ${ring(s)}</h3>
+    <div class="brk">${parts(t).map(p=>`<div class="brow"><span>${p.k}</span><span class="track"><i style="width:${p.v/p.m*100}%"></i></span><span>${Math.round(p.v)}/${p.m}</span><small>${esc(p.d)}</small></div>`).join('')}</div>
+    ${((t.ch.h24||0)<-80||t.liq<5000)?'<p class="note" style="margin-top:10px;color:var(--down)">Crash brake applied: score halved.</p>':''}</div>
+  <div class="card"><h3>Safety check <span class="risk ${r.lv}">${r.t} risk</span></h3>
+    <ul class="checks">${checks(t).map(c=>`<li><span class="ic ${c.ok?'ok':c.lvl==='high'?'bad':'mid'}" aria-hidden="true">${c.ok?'✓':'!'}</span>${c.k}<small>${esc(c.d)}</small></li>`).join('')}</ul>
+    ${t.chain==='solana'?'<p class="note" style="margin-top:10px">Open RugCheck for mint and freeze authority, top-holder share and LP lock.</p>':''}</div>
+  <div class="card stats">
+    <div><small>Market cap</small><b>${fmtUSD(t.mc)}</b></div><div><small>FDV</small><b>${fmtUSD(t.fdv)}</b></div><div><small>Liquidity</small><b>${onCurve(t)?'Bonding curve':fmtUSD(t.liq)}</b></div>
+    <div><small>Volume 1h</small><b>${fmtUSD(t.vol.h1)}</b></div><div><small>Volume 6h</small><b>${fmtUSD(t.vol.h6)}</b></div><div><small>Volume 24h</small><b>${fmtUSD(t.vol.h24)}</b></div></div>
+  <div class="card"><h3>Trades</h3><table class="txt"><thead><tr><th class="l">Window</th><th>Buys</th><th>Sells</th><th>Buy share</th></tr></thead><tbody>
+    ${[['h1','1 hour'],['h24','24 hours']].map(([k,l])=>{const b=t.tx[k].buys||0,se=t.tx[k].sells||0;return `<tr><td class="l">${l}</td><td class="num up">${fmtN(b)}</td><td class="num down">${fmtN(se)}</td><td class="num">${b+se?Math.round(b/(b+se)*100)+'%':'–'}</td></tr>`}).join('')}</tbody></table></div>
+  <div class="card"><h3>Alerts for ${esc(t.sym)}</h3>
+    ${paid()?`<div class="mini-form"><select id="akind" aria-label="Alert type"><option value="above">Price above</option><option value="below">Price below</option><option value="score">Signal score at least</option><option value="ch1">1h change above %</option></select><input id="aval" type="number" step="any" placeholder="Value" aria-label="Alert value"><button class="btn pro" id="addAlert">Add alert</button></div>
+      <div class="alist">${my.map(alertRow).join('')||'<p class="note">No alerts on this coin yet.</p>'}</div>`
+      :`<p class="note">Get pinged when ${esc(t.sym)} hits your price or score. <button class="linkish" data-pro>Alerts come with Pro</button></p>`}</div>
+  <div class="dacts"><button class="btn" id="dWatch">${watch.has(t.id)?'★ Watching':'☆ Add to watchlist'}</button><a class="btn pro" href="${esc(t.url)}" target="_blank" rel="noopener">Open on DexScreener</a></div>
+  <p class="note">${mode==='live'?'Live data from DexScreener · updated '+ago(lastUpdate):'DexScreener data from Oct 6, 2026.'}</p>`;
+  d.hidden=false;$('#scrim').hidden=false;d.scrollTop=keep;
+  $('#dClose').onclick=closeDrawer;
+  $('#copyA').onclick=()=>{try{navigator.clipboard.writeText(t.addr).then(()=>toast('Address copied'),()=>toast('Copy blocked. Select the address instead.'))}catch(_){toast('Copy blocked. Select the address instead.')}};
+  $('#dWatch').onclick=()=>toggleWatch(t.id);
+  $('#shareX').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(`$${t.sym} is showing a Signal Score of ${s}/100 on Moonscope (${pct(t.ch.h24)} 24h). Not financial advice.`);
+  d.querySelectorAll('[data-pro]').forEach(b=>b.onclick=()=>openModal('pricing'));
+  const add=$('#addAlert');if(add)add.onclick=()=>{const kind=$('#akind').value,val=parseFloat($('#aval').value);if(isNaN(val)){toast('Enter a number for the alert');return}
+    alerts.push({key:Date.now()+'',id:t.id,sym:t.sym,kind,val,fired:0});S.set('ms_alerts',alerts);toast('Alert added');askNotify();openDrawer(id,true)};
+  d.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{alerts=alerts.filter(a=>a.key!==b.dataset.del);S.set('ms_alerts',alerts);openDrawer(id,true)});
+  if($('#pc'))setupChart(id);
+}
+function closeDrawer(){$('#drawer').hidden=true;$('#scrim').hidden=true;openId=null}
+$('#scrim').onclick=closeDrawer;
+
+let geo=null;
+function drawChart(id,hi){
+  const cv=$('#pc');if(!cv)return;const box=$('#cbox'),dpr=window.devicePixelRatio||1,w=box.clientWidth,h=box.clientHeight;
+  cv.width=w*dpr;cv.height=h*dpr;const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+  const d=hist.get(id)||[];if(d.length<2)return;
+  const ps=d.map(x=>x.p),lo=Math.min(...ps),hi2=Math.max(...ps),pad=(hi2-lo)*.12||hi2*.002,y0=lo-pad,y1=hi2+pad,L=6,R=6,T=8,B=20,t0=d[0].t,t1=d.at(-1).t;
+  const X=t=>L+(t-t0)/Math.max(1,t1-t0)*(w-L-R),Y=v=>T+(1-(v-y0)/(y1-y0))*(h-T-B);
+  const css=getComputedStyle(document.documentElement),col=css.getPropertyValue(ps.at(-1)>=ps[0]?'--up':'--down').trim();
+  ctx.strokeStyle=css.getPropertyValue('--line').trim();ctx.lineWidth=1;for(let g=0;g<=3;g++){const yy=T+g*(h-T-B)/3;ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(w-R,yy);ctx.stroke()}
+  ctx.fillStyle=css.getPropertyValue('--faint').trim();ctx.font='11px "IBM Plex Mono", monospace';ctx.textAlign='left';ctx.fillText(ago(t0),L,h-5);ctx.textAlign='right';ctx.fillText('now',w-R,h-5);
+  const g=ctx.createLinearGradient(0,T,0,h-B);g.addColorStop(0,col+'40');g.addColorStop(1,col+'00');
+  ctx.beginPath();d.forEach((x,i)=>i?ctx.lineTo(X(x.t),Y(x.p)):ctx.moveTo(X(x.t),Y(x.p)));ctx.lineTo(X(t1),h-B);ctx.lineTo(X(t0),h-B);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  ctx.beginPath();d.forEach((x,i)=>i?ctx.lineTo(X(x.t),Y(x.p)):ctx.moveTo(X(x.t),Y(x.p)));ctx.strokeStyle=col;ctx.lineWidth=2;ctx.lineJoin='round';ctx.stroke();
+  const li=hi==null?d.length-1:hi;
+  if(hi!=null){ctx.strokeStyle=css.getPropertyValue('--muted').trim();ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(X(d[li].t),T);ctx.lineTo(X(d[li].t),h-B);ctx.stroke();ctx.setLineDash([])}
+  ctx.beginPath();ctx.arc(X(d[li].t),Y(d[li].p),4.5,0,7);ctx.fillStyle=col;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=css.getPropertyValue('--bg').trim();ctx.stroke();
+  geo={X,Y,d,w};
+}
+function setupChart(id){drawChart(id);const box=$('#cbox'),tip=$('#tip');
+  const mv=e=>{if(!geo)return;const r=box.getBoundingClientRect(),x=(e.touches?e.touches[0].clientX:e.clientX)-r.left;let bi=0,bd=1e9;geo.d.forEach((p,i)=>{const dd=Math.abs(geo.X(p.t)-x);if(dd<bd){bd=dd;bi=i}});
+    drawChart(id,bi);tip.hidden=false;tip.style.left=clamp(geo.X(geo.d[bi].t),60,geo.w-60)+'px';tip.style.top=geo.Y(geo.d[bi].p)+'px';tip.innerHTML=`<span class="num">${fmtPrice(geo.d[bi].p)}</span> · ${ago(geo.d[bi].t)}`};
+  box.onmousemove=mv;box.ontouchmove=mv;box.onmouseleave=()=>{tip.hidden=true;drawChart(id)}}
+window.addEventListener('resize',()=>{if(openId&&$('#pc'))drawChart(openId)});
+
+/* ---------- alerts ---------- */
+const KIND={above:'Price above',below:'Price below',score:'Signal score at least',ch1:'1h change above',market:'Any coin scores at least'};
+function alertRow(a){const v=a.kind==='above'||a.kind==='below'?fmtPrice(a.val):a.kind==='ch1'?a.val+'%':a.val;
+  return `<div class="arow${a.fired?' fired':''}"><div class="grow"><b>${a.kind==='market'?'All coins':esc(a.sym)}</b> · ${KIND[a.kind]} ${v}<small>${a.fired?'Triggered '+ago(a.fired):'Watching'}</small></div><button class="btn sm" data-del="${a.key}">Remove</button></div>`}
+function askNotify(){try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{})}catch(_){}}
+function notify(msg){toast(msg);alertLog.unshift({t:Date.now(),msg});alertLog=alertLog.slice(0,50);S.set('ms_alog',alertLog);unread++;$('#bellBadge').hidden=false;$('#bellBadge').textContent=unread;try{if('Notification' in window&&Notification.permission==='granted')new Notification('Moonscope',{body:msg})}catch(_){}}
+function checkAlerts(){
+  if(!paid()||mode!=='live')return;let ch=false;
+  alerts.forEach(a=>{
+    if(a.kind==='market'){if(plan!=='whale')return;a.seen=a.seen||[];all().forEach(t=>{const s=score(t);if(s>=a.val&&!a.seen.includes(t.id)){a.seen.push(t.id);notify(`${t.sym} hit a Signal Score of ${s}`);ch=true}});return}
+    if(a.fired)return;const t=store.get(a.id);if(!t)return;
+    const hit=a.kind==='above'?t.price>=a.val:a.kind==='below'?t.price<=a.val:a.kind==='score'?score(t)>=a.val:(t.ch.h1||0)>=a.val;
+    if(hit){a.fired=Date.now();ch=true;notify(`${t.sym}: ${KIND[a.kind].toLowerCase()} ${a.kind==='above'||a.kind==='below'?fmtPrice(a.val):a.val}`)}});
+  if(ch)S.set('ms_alerts',alerts);
+}
+function renderAlertsModal(){
+  const b=$('#alertsBody');
+  if(!paid()){b.innerHTML=`<p style="color:var(--muted)">Get pinged the moment a coin hits your price, Signal Score or 1-hour pump. Alerts come with Pro and Whale.</p><button class="btn pro" id="alPro">See plans</button>`;$('#alPro').onclick=()=>openModal('pricing');return}
+  b.innerHTML=`${plan==='whale'?`<div class="card" style="margin:12px 0"><h3>Market-wide alert</h3><div class="mini-form"><input id="mval" type="number" min="1" max="100" placeholder="Score, e.g. 70" aria-label="Score threshold"><button class="btn pro" id="addMarket">Alert me on any coin</button></div></div>`:'<p class="note" style="margin:10px 0">Market-wide alerts come with Whale.</p>'}
+   <h3 style="margin:16px 0 0;font-size:14px">Your alerts</h3><div class="alist">${alerts.map(alertRow).join('')||'<p class="note">No alerts yet. Open any coin and add one.</p>'}</div>
+   <h3 style="margin:18px 0 0;font-size:14px">Recent notifications</h3><div class="alist">${alertLog.slice(0,15).map(l=>`<div class="arow"><div class="grow">${esc(l.msg)}<small>${ago(l.t)}</small></div></div>`).join('')||'<p class="note">Nothing triggered yet.</p>'}</div>
+   ${mode!=='live'?'<p class="note" style="margin-top:12px">Alerts check prices on every live refresh, so they start once the site is on its own website.</p>':''}`;
+  const am=$('#addMarket');if(am)am.onclick=()=>{const v=parseFloat($('#mval').value);if(!(v>0)){toast('Enter a score from 1 to 100');return}alerts.push({key:Date.now()+'',kind:'market',val:v,seen:[]});S.set('ms_alerts',alerts);askNotify();renderAlertsModal()};
+  b.querySelectorAll('[data-del]').forEach(x=>x.onclick=()=>{alerts=alerts.filter(a=>a.key!==x.dataset.del);S.set('ms_alerts',alerts);renderAlertsModal()});
+}
+$('#bell').onclick=()=>{unread=0;$('#bellBadge').hidden=true;renderAlertsModal();openModal('alerts')};
+
+/* ---------- modals / plans ---------- */
+function openModal(id){document.querySelectorAll('.modal').forEach(m=>m.hidden=m.id!==id)}
+function closeModals(){document.querySelectorAll('.modal').forEach(m=>m.hidden=true)}
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m||e.target.closest('[data-close]'))m.hidden=true}));
+$('#goPro').onclick=()=>openModal('pricing');$('#howBtn').onclick=()=>openModal('how');
+document.querySelectorAll('[data-plan]').forEach(a=>{const u=WHOP[a.dataset.plan];if(u)a.href=u;else a.addEventListener('click',e=>{e.preventDefault();toast('Checkout link not added yet')})});
+if(!WHOP.pro&&!WHOP.whale)$('#payNote').textContent="Checkout isn't connected yet.";
+$('#previewPlan').onclick=()=>{plan=plan==='free'?'whale':'free';S.set('ms_plan',plan);applyPlan();closeModals();toast(plan==='free'?'Back on the Free plan':'Previewing Whale features on this device');render();updateStatus();clearTimeout(timer);if(mode==='live')timer=setTimeout(tick,interval())};
+function applyPlan(){
+  $('#goPro').textContent=paid()?plan[0].toUpperCase()+plan.slice(1)+' plan':'Go Pro';
+  $('#previewPlan').textContent=paid()?'Switch back to Free':'Preview paid features on this device';
+  $('#previewPlan').hidden=!!WHOP_CLIENT_ID;
+  const si=$('#signin');si.textContent=me?(me.name||'Account'):'Sign in';si.classList.toggle('on',!!me);
+  $('#prSignin').hidden=!!me;
+}
+/* ---------- Sign in with Whop (OAuth 2.1 + PKCE) ---------- */
+const b64url=b=>btoa(String.fromCharCode(...b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const rand=()=>b64url(crypto.getRandomValues(new Uint8Array(32)));
+const redirectUri=()=>location.origin+location.pathname;
+async function signIn(){
+  if(!WHOP_CLIENT_ID){toast('Sign-in turns on once the Whop app is connected');return}
+  if(!/^https?:/.test(location.protocol)){toast('Sign-in works on your live website');return}
+  const v=rand(),c=b64url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)))),state=rand(),nonce=rand();
+  try{sessionStorage.setItem('ms_pkce',JSON.stringify({v,state,back:location.hash}))}catch(_){}
+  const qs=new URLSearchParams({response_type:'code',client_id:WHOP_CLIENT_ID,redirect_uri:redirectUri(),scope:'openid profile',state,nonce,code_challenge:c,code_challenge_method:'S256'});
+  location.href='https://api.whop.com/oauth/authorize?'+qs;
+}
+async function tokenPost(body){
+  let r=await fetch('https://api.whop.com/oauth/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok)r=await fetch('https://api.whop.com/oauth/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body)});
+  if(!r.ok)throw new Error('token '+r.status);
+  const j=await r.json();session={access:j.access_token,refresh:j.refresh_token||(session&&session.refresh),exp:Date.now()+(j.expires_in||3600)*1000};S.set('ms_session',session);return session;
+}
+async function handleCallback(){
+  const u=new URL(location.href),code=u.searchParams.get('code'),st=u.searchParams.get('state'),err=u.searchParams.get('error');
+  if(!code&&!err)return;
+  let saved=null;try{saved=JSON.parse(sessionStorage.getItem('ms_pkce')||'null');sessionStorage.removeItem('ms_pkce')}catch(_){}
+  history.replaceState(null,'',u.pathname+((saved&&saved.back)||''));
+  if(err){toast('Sign-in was cancelled');return}
+  if(!saved||saved.state!==st){toast('Sign-in expired. Please try again.');return}
+  try{await tokenPost({grant_type:'authorization_code',code,redirect_uri:redirectUri(),client_id:WHOP_CLIENT_ID,code_verifier:saved.v});await refreshMe(true)}
+  catch(e){toast('Could not finish sign-in. Please try again.')}
+}
+async function token(){
+  if(!session)return null;
+  if(Date.now()>session.exp-300000){if(!session.refresh)return null;try{await tokenPost({grant_type:'refresh_token',refresh_token:session.refresh,client_id:WHOP_CLIENT_ID})}catch(_){signOut(true);return null}}
+  return session.access;
+}
+async function refreshMe(welcome){
+  const t=await token();if(!t)return;
+  try{const r=await fetch(ACCESS_API,{headers:{Authorization:'Bearer '+t}});if(r.status===401){signOut(true);return}if(!r.ok)throw 0;
+    const j=await r.json();me={name:j.name||'',plan:j.plan||'free'};S.set('ms_me',me);
+    const changed=plan!==me.plan;plan=me.plan;applyPlan();render();updateStatus();
+    if(welcome)toast(paid()?`Welcome${me.name?', '+me.name:''}. Your ${plan[0].toUpperCase()+plan.slice(1)} plan is active.`:'Signed in. Pick a plan to unlock Pro features.');
+    if(changed&&mode==='live'){clearTimeout(timer);timer=setTimeout(tick,interval())}
+  }catch(_){if(welcome)toast('Signed in, but your plan could not be checked yet')}
+}
+function signOut(quiet){
+  const rt=session&&session.refresh;
+  if(rt)fetch('https://api.whop.com/oauth/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:rt,client_id:WHOP_CLIENT_ID})}).catch(()=>{});
+  session=null;me=null;S.set('ms_session',null);S.set('ms_me',null);plan='free';applyPlan();render();updateStatus();closeModals();if(!quiet)toast('Signed out');
+}
+function renderAccount(){
+  const b=$('#accountBody');
+  b.innerHTML=`<div class="arow"><div class="grow"><b>${esc(me.name||'Whop member')}</b><small>Plan: ${plan==='free'?'Free':plan==='pro'?'Pro · $19/week':'Whale · $49/month'}</small></div></div>
+   ${paid()?'':'<button class="btn pro" id="acUp">Upgrade</button>'}
+   <a class="btn" href="https://whop.com/" target="_blank" rel="noopener">Manage or cancel on Whop</a>
+   <button class="btn" id="acRe">Refresh my plan</button>
+   <button class="btn" id="acOut">Sign out</button>`;
+  const up=$('#acUp');if(up)up.onclick=()=>openModal('pricing');
+  $('#acRe').onclick=async()=>{await refreshMe();renderAccount();toast('Plan checked')};
+  $('#acOut').onclick=()=>signOut();
+}
+$('#signin').onclick=()=>{if(me){renderAccount();openModal('account')}else signIn()};
+$('#prSignin').onclick=()=>signIn();
+setInterval(()=>{if(me)refreshMe()},10*60*1000);
+applyPlan();
+
+/* start */
+const h0=(location.hash||'').slice(1);if(PAGES.some(p=>p.id===h0))page=h0;
+render();tick();
+handleCallback().then(()=>{if(session&&!new URL(location.href).searchParams.get('code'))refreshMe()});
+})();
+</script>
+
+</body></html>
