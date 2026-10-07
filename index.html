@@ -42,6 +42,7 @@ a{color:inherit}
 .search kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--f-mono);font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:4px;padding:0 5px}
 .btn{border:0;border-radius:8px;padding:9px 14px;font-weight:700;background:var(--raised);display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;white-space:nowrap}
 .btn:hover{background:var(--hover)}
+#trkBtn[hidden]{display:none!important}
 .btn.pro{background:var(--accent);color:var(--accent-ink)}
 .btn.pro:hover{filter:brightness(1.06);background:var(--accent)}
 .btn.sm{padding:6px 10px;font-size:12.5px}
@@ -256,7 +257,7 @@ tbody tr:last-child td{border-bottom:0}
 
 @media (max-width:1100px){.cards{grid-template-columns:repeat(3,minmax(0,1fr))}.cards .ccard:nth-child(n+7){display:none}.metas{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){
-  .pages{display:none}.mpages{display:flex}
+  .pages{display:none}.mpages{display:flex}#trkBtn{display:none!important}
   .hero{grid-template-columns:repeat(2,minmax(0,1fr))}
   .cols2{grid-template-columns:1fr}
   .plans{grid-template-columns:1fr}
@@ -289,6 +290,7 @@ tbody tr:last-child td{border-bottom:0}
     <nav class="pages" id="pages" aria-label="Pages"></nav>
     <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" type="search" placeholder="Search coin or contract" aria-label="Search coins" autocomplete="off"><kbd>/</kbd></label>
     <button class="icon-btn" id="bell" aria-label="Alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="badge" id="bellBadge" hidden>0</span></button>
+    <button class="btn" id="trkBtn" data-page="tracker" title="Only you can see this" hidden>🔒 Tracker</button>
     <button class="btn" id="signin">Sign in</button>
     <button class="btn pro" id="goPro">Go Pro</button>
   </div>
@@ -539,7 +541,7 @@ setInterval(()=>{const u=$('#upd');if(u)u.textContent=ago(lastUpdate)},5000);
 
 /* ---------- navigation ---------- */
 function navHTML(){return PAGES.map(p=>`<button data-page="${p.id}" class="${p.cls||''}" ${page===p.id?'aria-current="page"':''}>${p.t}${p.id==='watch'&&watch.size?` <span class="num" style="color:var(--muted)">${watch.size}</span>`:''}</button>`).join('')}
-function renderNav(){const h=navHTML()+trackerNav();$('#pages').innerHTML=h;$('#mpages').innerHTML=h}
+function renderNav(){const h=navHTML();$('#pages').innerHTML=h;$('#mpages').innerHTML=h+trackerNav();const tb=$('#trkBtn');if(tb)tb.hidden=!(me&&me.team)}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b){go(b.dataset.page,b.dataset.meta)}});
 function go(p,meta){
   page=p;metaSlug=meta||null;subf='all';limit=50;searchHits=null;q='';$('#q').value='';
