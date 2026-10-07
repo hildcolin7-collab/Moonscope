@@ -539,7 +539,7 @@ setInterval(()=>{const u=$('#upd');if(u)u.textContent=ago(lastUpdate)},5000);
 
 /* ---------- navigation ---------- */
 function navHTML(){return PAGES.map(p=>`<button data-page="${p.id}" class="${p.cls||''}" ${page===p.id?'aria-current="page"':''}>${p.t}${p.id==='watch'&&watch.size?` <span class="num" style="color:var(--muted)">${watch.size}</span>`:''}</button>`).join('')}
-function renderNav(){$('#pages').innerHTML=navHTML();$('#mpages').innerHTML=navHTML()}
+function renderNav(){const h=navHTML()+trackerNav();$('#pages').innerHTML=h;$('#mpages').innerHTML=h}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b){go(b.dataset.page,b.dataset.meta)}});
 function go(p,meta){
   page=p;metaSlug=meta||null;subf='all';limit=50;searchHits=null;q='';$('#q').value='';
@@ -678,8 +678,46 @@ function renderNarratives(){
 $('#rows').addEventListener('click',e=>{const st=e.target.closest('[data-star]');if(st){e.stopPropagation();toggleWatch(st.dataset.star);return}const tr=e.target.closest('tr[data-id]');if(tr)openDrawer(tr.dataset.id)});
 $('#rows').addEventListener('keydown',e=>{if(e.key==='Enter'){const tr=e.target.closest('tr[data-id]');if(tr)openDrawer(tr.dataset.id)}});
 
+/* ---------- Signal Tracker (owner only) ---------- */
+let trk={data:null,loading:false,hz:'r24'};
+function trackerNav(){return me&&me.team?`<button data-page="tracker" ${page==='tracker'?'aria-current="page"':''} title="Only you can see this">🔒 Tracker</button>`:''}
+async function loadTracker(){
+  if(trk.loading)return;trk.loading=true;
+  try{const t=await token();const r=await fetch('/.netlify/functions/tracker',{headers:{Authorization:'Bearer '+(t||'')}});trk.data=r.ok?await r.json():{error:r.status}}
+  catch(e){trk.data={error:'network'}}
+  trk.loading=false;if(page==='tracker')render();
+}
+function trkSum(a){if(!a.length)return null;const r=a.map(x=>x.ret).sort((x,y)=>x-y);
+  return {n:a.length,up:a.filter(x=>x.ret>0).length/a.length*100,x2:a.filter(x=>x.ret>=100).length/a.length*100,d30:a.filter(x=>x.ret<=-30).length/a.length*100,med:r[Math.floor(r.length/2)]}}
+function renderTracker(){
+  $('#home').hidden=false;$('#list').hidden=true;const h=$('#home');
+  if(!(me&&me.team)){h.innerHTML='<div class="empty"><b>This page is private.</b></div>';return}
+  if(!trk.data){loadTracker();h.innerHTML='<div class="phead"><h1>🔒 Signal Tracker</h1><p>Loading your results…</p></div>';return}
+  if(trk.data.error){h.innerHTML=`<div class="phead"><h1>🔒 Signal Tracker</h1><p>Couldn't load the tracker (${esc(trk.data.error)}). <button class="linkish" id="trkRe">Try again</button></p></div>`;$('#trkRe').onclick=()=>{trk.data=null;render()};return}
+  const snaps=(trk.data.snapshots||[]).slice().sort((a,b)=>b.t-a.t),hz=trk.hz,HZL={r1:'1 hour',r6:'6 hours',r24:'24 hours'};
+  const rows=[];snaps.forEach(s=>s.coins.forEach(c=>{const p=c[hz];if(p!=null&&p>=0&&c.price>0)rows.push({score:c.score,risk:c.risk,ret:(p/c.price-1)*100})}));
+  const all=trkSum(rows),pend=snaps.reduce((n,s)=>n+s.coins.filter(c=>c[hz]===undefined).length,0);
+  const fmtP=v=>v==null?'–':(v>0?'+':'')+(Math.abs(v)>=1000?Math.round(v).toLocaleString():v.toFixed(0))+'%';
+  const card=(l,v,sub,cl)=>`<div class="pcard"><small>${l}</small><b class="${cl||''}">${v}</b><span class="flat">${sub}</span></div>`;
+  const buckets=[['90 and up',90,101],['80 to 89',80,90],['70 to 79',70,80],['Under 70',0,70]].map(([l,lo,hi])=>[l,trkSum(rows.filter(x=>x.score>=lo&&x.score<hi))]);
+  const risks=[['Low risk','low'],['Medium risk','med'],['High risk','high']].map(([l,k])=>[l,trkSum(rows.filter(x=>x.risk===k))]);
+  const tbl=(title,list)=>`<div class="box" style="padding:4px 14px"><table class="txt"><thead><tr><th class="l">${title}</th><th>Coins</th><th>Went up</th><th>2× or more</th><th>Dropped 30%+</th><th>Typical result</th></tr></thead><tbody>${list.map(([l,s])=>`<tr><td class="l">${l}</td><td class="num">${s?s.n:0}</td><td class="num">${s?s.up.toFixed(0)+'%':'–'}</td><td class="num up">${s?s.x2.toFixed(0)+'%':'–'}</td><td class="num down">${s?s.d30.toFixed(0)+'%':'–'}</td><td class="num ${s?cls(s.med):''}">${s?fmtP(s.med):'–'}</td></tr>`).join('')}</tbody></table></div>`;
+  const recent=snaps.slice(0,12).map(s=>`<div class="box" style="padding:12px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px"><b>${new Date(s.t).toLocaleString(undefined,{weekday:'short',hour:'numeric',minute:'2-digit'})}</b><span class="note">Top ${s.coins.length} Hot coins</span></div><div style="display:flex;flex-wrap:wrap;gap:6px">${s.coins.map(c=>{const p=c[hz],r=p!=null&&p>=0&&c.price>0?(p/c.price-1)*100:null;return `<span class="chain" style="font-size:12px;padding:4px 8px" title="${esc(c.name)} · score ${c.score}">${esc(c.sym)} <span class="num" style="color:var(--muted)">${c.score}</span> <span class="num ${r==null?'flat':cls(r)}">${r==null?(p===-1?'n/a':'pending'):fmtP(r)}</span></span>`}).join('')}</div></div>`).join('');
+  h.innerHTML=`<div class="phead"><h1>🔒 Signal Tracker</h1><p>Only you can see this page. Every hour Moonscope saves its top 10 "Hot right now" coins, then checks their prices 1, 6 and 24 hours later.</p></div>
+   <div class="filters"><div class="chips" id="trkHz">${['r1','r6','r24'].map(k=>`<button data-hz="${k}" aria-pressed="${hz===k}">After ${HZL[k]}</button>`).join('')}</div><button class="linkish" id="trkRe">Refresh</button><span class="count">${snaps.length} hourly snapshots · ${pend} results still pending</span></div>
+   ${all?`<div class="hero">${card('Coins checked',all.n,'after '+HZL[hz])}${card('Went up',all.up.toFixed(0)+'%','of Hot coins',all.up>=50?'up':'down')}${card('2× or more',all.x2.toFixed(0)+'%','big winners','up')}${card('Typical result',fmtP(all.med),all.d30.toFixed(0)+'% dropped 30%+',cls(all.med))}</div>
+   <div class="sec"><div class="sech"><div><h2>By Signal Score</h2><p>Do higher scores actually do better?</p></div></div>${tbl('Score',buckets)}</div>
+   <div class="sec"><div class="sech"><div><h2>By risk level</h2><p>How the safety check lines up with results.</p></div></div>${tbl('Risk',risks)}</div>`
+   :`<div class="box" style="padding:22px;margin-bottom:24px"><b>Tracking has started.</b><p class="note" style="margin-top:6px">The first results show up ${HZL[hz]} after the first snapshot. Check back later, and try the "After 1 hour" view first.</p></div>`}
+   <div class="sec"><div class="sech"><div><h2>Recent snapshots</h2><p>Score and result after ${HZL[hz]} for each coin.</p></div></div>${recent||'<p class="note">No snapshots yet.</p>'}</div>
+   <p class="note">"Typical result" is the median, so one huge winner can't skew it. Results are price changes only and don't include trading fees. Past results don't predict future ones.</p>`;
+  $('#trkHz').onclick=e=>{const b=e.target.closest('[data-hz]');if(b){trk.hz=b.dataset.hz;render()}};
+  $('#trkRe').onclick=()=>{trk.data=null;render()};
+}
+
 function render(){
   renderNav();
+  if(page==='tracker'&&!q){renderTracker();return}
   if(page==='home'&&!q){$('#home').hidden=false;$('#list').hidden=true;renderHome();return}
   if(page==='narratives'&&!metaSlug&&!q){renderNarratives();return}
   $('#home').hidden=true;$('#list').hidden=false;renderList();
@@ -853,7 +891,7 @@ async function token(){
 async function refreshMe(welcome){
   const t=await token();if(!t)return;
   try{const r=await fetch(ACCESS_API,{headers:{Authorization:'Bearer '+t}});if(r.status===401){signOut(true);return}if(!r.ok)throw 0;
-    const j=await r.json();me={name:j.name||'',plan:j.plan||'free'};S.set('ms_me',me);
+    const j=await r.json();me={name:j.name||'',plan:j.plan||'free',team:!!j.team};S.set('ms_me',me);
     const changed=plan!==me.plan;plan=me.plan;applyPlan();render();updateStatus();
     if(welcome)toast(paid()?`Welcome${me.name?', '+me.name:''}. Your ${plan[0].toUpperCase()+plan.slice(1)} plan is active.`:'Signed in. Pick a plan to unlock Pro features.');
     if(changed&&mode==='live'){clearTimeout(timer);timer=setTimeout(tick,interval())}
