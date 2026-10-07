@@ -7,7 +7,7 @@ export default async (req) => {
   const user = await verifyOwner(req);
   if (!user) return json({ error: "forbidden" }, 403);
   const store = getStore("tracker");
-  try { await takeSnapshot(store); await evaluate(store); } catch (e) { console.log("tracker refresh failed", String(e)); }
+  try { await takeSnapshot(store); await evaluate(store, Date.now(), { budgetMs: 2500 }); } catch (e) { console.log("tracker refresh failed", String(e)); }
   const snaps = await listSnapshots(store, 14);
   return json({ snapshots: snaps, now: Date.now() });
 };
