@@ -681,7 +681,11 @@ $('#rows').addEventListener('click',e=>{const st=e.target.closest('[data-star]')
 $('#rows').addEventListener('keydown',e=>{if(e.key==='Enter'){const tr=e.target.closest('tr[data-id]');if(tr)openDrawer(tr.dataset.id)}});
 
 /* ---------- Signal Tracker (owner only) ---------- */
-let trk={data:null,loading:false,hz:'r24'};
+let trk={data:null,loading:false,hz:'m60'};
+const TRK_HZ=[['m5','5 min'],['m10','10 min'],['m15','15 min'],['m20','20 min'],['m25','25 min'],['m30','30 min'],['m40','40 min'],['m50','50 min'],['m60','1 hour'],['h2','2 hours'],['h3','3 hours'],['h6','6 hours'],['h12','12 hours'],['h24','24 hours']];
+const TRK_OLD={m60:'r1',h6:'r6',h24:'r24'};
+function trkP(c,k){let v=c[k];if(v===undefined&&TRK_OLD[k])v=c[TRK_OLD[k]];return v}
+function trkRet(c,k){const p=trkP(c,k);return p!=null&&p>=0&&c.price>0?(p/c.price-1)*100:null}
 function trackerNav(){return me&&me.team?`<button data-page="tracker" ${page==='tracker'?'aria-current="page"':''} title="Only you can see this">🔒 Tracker</button>`:''}
 async function loadTracker(){
   if(trk.loading)return;trk.loading=true;
@@ -691,32 +695,58 @@ async function loadTracker(){
 }
 function trkSum(a){if(!a.length)return null;const r=a.map(x=>x.ret).sort((x,y)=>x-y);
   return {n:a.length,up:a.filter(x=>x.ret>0).length/a.length*100,x2:a.filter(x=>x.ret>=100).length/a.length*100,d30:a.filter(x=>x.ret<=-30).length/a.length*100,med:r[Math.floor(r.length/2)]}}
+function trkMed(a){if(!a.length)return null;const s=a.slice().sort((x,y)=>x-y);return s[Math.floor(s.length/2)]}
+function trkAge(m){return m==null?'–':m<60?m+'m':m<1440?Math.round(m/60)+'h':Math.round(m/1440)+'d'}
 function renderTracker(){
   $('#home').hidden=false;$('#list').hidden=true;const h=$('#home');
   if(!(me&&me.team)){h.innerHTML='<div class="empty"><b>This page is private.</b></div>';return}
   if(!trk.data){loadTracker();h.innerHTML='<div class="phead"><h1>🔒 Signal Tracker</h1><p>Loading your results…</p></div>';return}
   if(trk.data.error){h.innerHTML=`<div class="phead"><h1>🔒 Signal Tracker</h1><p>Couldn't load the tracker (${esc(trk.data.error)}). <button class="linkish" id="trkRe">Try again</button></p></div>`;$('#trkRe').onclick=()=>{trk.data=null;render()};return}
-  const snaps=(trk.data.snapshots||[]).slice().sort((a,b)=>b.t-a.t),hz=trk.hz,HZL={r1:'1 hour',r6:'6 hours',r24:'24 hours'};
-  const rows=[];snaps.forEach(s=>s.coins.forEach(c=>{const p=c[hz];if(p!=null&&p>=0&&c.price>0)rows.push({score:c.score,risk:c.risk,ret:(p/c.price-1)*100})}));
-  const all=trkSum(rows),pend=snaps.reduce((n,s)=>n+s.coins.filter(c=>c[hz]===undefined).length,0);
+  const snaps=(trk.data.snapshots||[]).slice().sort((a,b)=>b.t-a.t),hz=trk.hz,HZL=Object.fromEntries(TRK_HZ);
+  const coins=[];snaps.forEach(s=>s.coins.forEach(c=>coins.push(c)));
+  const rowsFor=k=>coins.map(c=>({c,ret:trkRet(c,k)})).filter(x=>x.ret!=null).map(x=>({score:x.c.score,risk:x.c.risk,age:x.c.age,b1:x.c.b1,s1:x.c.s1,ret:x.ret}));
+  const rows=rowsFor(hz),all=trkSum(rows),pend=coins.filter(c=>trkP(c,hz)===undefined).length;
   const fmtP=v=>v==null?'–':(v>0?'+':'')+(Math.abs(v)>=1000?Math.round(v).toLocaleString():v.toFixed(0))+'%';
+  const pct=v=>v==null?'–':v.toFixed(0)+'%';
   const card=(l,v,sub,cl)=>`<div class="pcard"><small>${l}</small><b class="${cl||''}">${v}</b><span class="flat">${sub}</span></div>`;
+  const head=`<tr><th class="l">${'%T%'}</th><th>Coins</th><th>Went up</th><th>2× or more</th><th>Dropped 30%+</th><th>Typical result</th></tr>`;
+  const line=(l,s,extra)=>`<tr${extra||''}><td class="l">${l}</td><td class="num">${s?s.n:0}</td><td class="num">${s?pct(s.up):'–'}</td><td class="num up">${s?pct(s.x2):'–'}</td><td class="num down">${s?pct(s.d30):'–'}</td><td class="num ${s?cls(s.med):''}">${s?fmtP(s.med):'–'}</td></tr>`;
+  const tbl=(title,list)=>`<div class="box" style="padding:4px 14px;overflow-x:auto"><table class="txt"><thead>${head.replace('%T%',title)}</thead><tbody>${list.map(([l,s])=>line(l,s)).join('')}</tbody></table></div>`;
+  const sec=(t,p,body)=>`<div class="sec"><div class="sech"><div><h2>${t}</h2><p>${p}</p></div></div>${body}</div>`;
+  // Best time to sell: every checkpoint side by side
+  const byHz=TRK_HZ.map(([k,l])=>[k,l,trkSum(rowsFor(k))]).filter(x=>x[2]);
+  const best=byHz.length?byHz.reduce((a,b)=>b[2].med>a[2].med?b:a):null;
+  const sellTbl=byHz.length?`<div class="box" style="padding:4px 14px;overflow-x:auto"><table class="txt"><thead>${head.replace('%T%','Sold after')}</thead><tbody>${byHz.map(([k,l,s])=>line(l+(best&&k===best[0]&&byHz.length>1?' <span class="up">★ best so far</span>':''),s,k===hz?' style="background:var(--raised)"':'')).join('')}</tbody></table></div>`:'';
+  // First hour peak
+  const pk=coins.filter(c=>c.pk>0&&c.price>0&&c.cd===1).map(c=>({p:(c.pk/c.price-1)*100,m:c.pkm,lo:(c.lo/c.price-1)*100,end:trkRet(c,'m60')}));
+  const dumped=pk.filter(x=>x.p>=20&&x.end!=null&&x.end<0).length, never=pk.filter(x=>x.p<5).length;
+  const tBuckets=[['0–10 min',0,10],['10–20 min',10,20],['20–30 min',20,30],['30–45 min',30,45],['45–60 min',45,61]].map(([l,a,b])=>{const g=pk.filter(x=>x.m>=a&&x.m<b);return `<tr><td class="l">${l}</td><td class="num">${g.length}</td><td class="num">${pk.length?pct(g.length/pk.length*100):'–'}</td><td class="num up">${fmtP(trkMed(g.map(x=>x.p)))}</td><td class="num ${cls(trkMed(g.filter(x=>x.end!=null).map(x=>x.end))||0)}">${fmtP(trkMed(g.filter(x=>x.end!=null).map(x=>x.end)))}</td></tr>`}).join('');
+  const peakSec=pk.length?sec('First hour: peak vs. where it ended','How high Hot coins went in their first hour, when they peaked, and what was left at 1 hour.',
+    `<div class="hero">${card('Typical peak',fmtP(trkMed(pk.map(x=>x.p))),'highest point in the first hour','up')}${card('Peak came at',Math.round(trkMed(pk.map(x=>x.m)))+' min','typical time to the top')}${card('Pumped then dumped',pct(dumped/pk.length*100),'went +20% or more, ended the hour down','down')}${card('Never got going',pct(never/pk.length*100),'never got above +5%')}</div>
+    <div class="box" style="padding:4px 14px;overflow-x:auto"><table class="txt"><thead><tr><th class="l">Peaked at</th><th>Coins</th><th>Share</th><th>Typical peak</th><th>Result at 1 hour</th></tr></thead><tbody>${tBuckets}</tbody></table></div>`):'';
   const buckets=[['90 and up',90,101],['80 to 89',80,90],['70 to 79',70,80],['Under 70',0,70]].map(([l,lo,hi])=>[l,trkSum(rows.filter(x=>x.score>=lo&&x.score<hi))]);
   const risks=[['Low risk','low'],['Medium risk','med'],['High risk','high']].map(([l,k])=>[l,trkSum(rows.filter(x=>x.risk===k))]);
-  const tbl=(title,list)=>`<div class="box" style="padding:4px 14px"><table class="txt"><thead><tr><th class="l">${title}</th><th>Coins</th><th>Went up</th><th>2× or more</th><th>Dropped 30%+</th><th>Typical result</th></tr></thead><tbody>${list.map(([l,s])=>`<tr><td class="l">${l}</td><td class="num">${s?s.n:0}</td><td class="num">${s?s.up.toFixed(0)+'%':'–'}</td><td class="num up">${s?s.x2.toFixed(0)+'%':'–'}</td><td class="num down">${s?s.d30.toFixed(0)+'%':'–'}</td><td class="num ${s?cls(s.med):''}">${s?fmtP(s.med):'–'}</td></tr>`).join('')}</tbody></table></div>`;
-  const recent=snaps.slice(0,12).map(s=>`<div class="box" style="padding:12px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px"><b>${new Date(s.t).toLocaleString(undefined,{weekday:'short',hour:'numeric',minute:'2-digit'})}</b><span class="note">Top ${s.coins.length} Hot coins</span></div><div style="display:flex;flex-wrap:wrap;gap:6px">${s.coins.map(c=>{const p=c[hz],r=p!=null&&p>=0&&c.price>0?(p/c.price-1)*100:null;return `<span class="chain" style="font-size:12px;padding:4px 8px" title="${esc(c.name)} · score ${c.score}">${esc(c.sym)} <span class="num" style="color:var(--muted)">${c.score}</span> <span class="num ${r==null?'flat':cls(r)}">${r==null?(p===-1?'n/a':'pending'):fmtP(r)}</span></span>`}).join('')}</div></div>`).join('');
-  h.innerHTML=`<div class="phead"><h1>🔒 Signal Tracker</h1><p>Only you can see this page. Every hour Moonscope saves its top 10 "Hot right now" coins, then checks their prices 1, 6 and 24 hours later.</p></div>
-   <div class="filters"><div class="chips" id="trkHz">${['r1','r6','r24'].map(k=>`<button data-hz="${k}" aria-pressed="${hz===k}">After ${HZL[k]}</button>`).join('')}</div><button class="linkish" id="trkRe">Refresh</button><span class="count">${snaps.length} hourly snapshots · ${pend} results still pending</span></div>
-   ${all?`<div class="hero">${card('Coins checked',all.n,'after '+HZL[hz])}${card('Went up',all.up.toFixed(0)+'%','of Hot coins',all.up>=50?'up':'down')}${card('2× or more',all.x2.toFixed(0)+'%','big winners','up')}${card('Typical result',fmtP(all.med),all.d30.toFixed(0)+'% dropped 30%+',cls(all.med))}</div>
-   <div class="sec"><div class="sech"><div><h2>By Signal Score</h2><p>Do higher scores actually do better?</p></div></div>${tbl('Score',buckets)}</div>
-   <div class="sec"><div class="sech"><div><h2>By risk level</h2><p>How the safety check lines up with results.</p></div></div>${tbl('Risk',risks)}</div>`
-   :`<div class="box" style="padding:22px;margin-bottom:24px"><b>Tracking has started.</b><p class="note" style="margin-top:6px">The first results show up ${HZL[hz]} after the first snapshot. Check back later, and try the "After 1 hour" view first.</p></div>`}
-   <div class="sec"><div class="sech"><div><h2>Recent snapshots</h2><p>Score and result after ${HZL[hz]} for each coin.</p></div></div>${recent||'<p class="note">No snapshots yet.</p>'}</div>
-   <p class="note">"Typical result" is the median, so one huge winner can't skew it. Results are price changes only and don't include trading fees. Past results don't predict future ones.</p>`;
+  const aged=rows.filter(x=>x.age!=null);
+  const ages=[['Under 30 min old',0,30],['30 min to 2 hours',30,120],['2 to 24 hours',120,1440],['Over 1 day',1440,1e9]].map(([l,a,b])=>[l,trkSum(aged.filter(x=>x.age>=a&&x.age<b))]);
+  const flow=rows.filter(x=>x.b1!=null&&x.s1!=null);
+  const flows=[['More buyers (1.5× sellers)',x=>x.b1>=x.s1*1.5],['About even',x=>x.b1<x.s1*1.5&&x.b1>=x.s1],['More sellers than buyers',x=>x.b1<x.s1]].map(([l,f])=>[l,trkSum(flow.filter(f))]);
+  const detail=s=>`<details style="margin-top:10px"><summary class="linkish" style="cursor:pointer">See every checkpoint</summary><div style="overflow-x:auto;margin-top:8px"><table class="txt"><thead><tr><th class="l">Coin</th><th>Score</th><th>Age</th><th>Buys/Sells</th>${TRK_HZ.map(([k,l])=>`<th>${l.replace(' min','m').replace(' hours','h').replace(' hour','h')}</th>`).join('')}<th>1st-hr peak</th><th>1st-hr low</th></tr></thead><tbody>${s.coins.map(c=>`<tr><td class="l">${esc(c.sym)}</td><td class="num">${c.score}</td><td class="num">${trkAge(c.age)}</td><td class="num">${c.b1!=null?c.b1+'/'+c.s1:'–'}</td>${TRK_HZ.map(([k])=>{const p=trkP(c,k),r=trkRet(c,k);return `<td class="num ${r==null?'flat':cls(r)}">${r==null?(p===-1?'n/a':'…'):fmtP(r)}</td>`}).join('')}<td class="num up">${c.cd===1?fmtP((c.pk/c.price-1)*100)+' @'+c.pkm+'m':'–'}</td><td class="num down">${c.cd===1?fmtP((c.lo/c.price-1)*100):'–'}</td></tr>`).join('')}</tbody></table></div></details>`;
+  const recent=snaps.slice(0,12).map(s=>`<div class="box" style="padding:12px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px"><b>${new Date(s.t).toLocaleString(undefined,{weekday:'short',hour:'numeric',minute:'2-digit'})}</b><span class="note">Top ${s.coins.length} Hot coins</span></div><div style="display:flex;flex-wrap:wrap;gap:6px">${s.coins.map(c=>{const p=trkP(c,hz),r=trkRet(c,hz);return `<span class="chain" style="font-size:12px;padding:4px 8px" title="${esc(c.name)} · score ${c.score}">${esc(c.sym)} <span class="num" style="color:var(--muted)">${c.score}</span> <span class="num ${r==null?'flat':cls(r)}">${r==null?(p===-1?'n/a':'pending'):fmtP(r)}</span></span>`}).join('')}</div>${detail(s)}</div>`).join('');
+  h.innerHTML=`<div class="phead"><h1>🔒 Signal Tracker</h1><p>Only you can see this page. Every hour Moonscope saves its top 10 "Hot right now" coins, then checks their price from 5 minutes up to 24 hours later, plus how high and low they went in the first hour.</p></div>
+   <div class="filters" style="flex-wrap:wrap"><div class="chips" id="trkHz" style="flex-wrap:wrap">${TRK_HZ.map(([k,l])=>`<button data-hz="${k}" aria-pressed="${hz===k}">${l}</button>`).join('')}</div><button class="linkish" id="trkRe">Refresh</button><span class="count">${snaps.length} hourly snapshots · ${pend} results still pending for ${HZL[hz]}</span></div>
+   ${all?`<div class="hero">${card('Coins checked',all.n,'after '+HZL[hz])}${card('Went up',pct(all.up),'of Hot coins',all.up>=50?'up':'down')}${card('2× or more',pct(all.x2),'big winners','up')}${card('Typical result',fmtP(all.med),pct(all.d30)+' dropped 30%+',cls(all.med))}</div>`
+   :`<div class="box" style="padding:22px;margin-bottom:24px"><b>No results for ${HZL[hz]} yet.</b><p class="note" style="margin-top:6px">The 5 to 50 minute results fill in about an hour after each snapshot (they come from 5-minute price charts). Longer ones fill in once that much time has passed.</p></div>`}
+   ${sellTbl?sec('Best time to sell','Every checkpoint side by side. The highlighted row is the one you picked above.',sellTbl):''}
+   ${peakSec}
+   ${all?sec('By Signal Score','Do higher scores actually do better? (after '+HZL[hz]+')',tbl('Score',buckets))
+     +sec('By coin age','How old the coin was when it hit the Hot list.',tbl('Age',ages))
+     +sec('Buyers vs. sellers','Trades in the hour before the coin was saved.',tbl('Trading',flows))
+     +sec('By risk level','How the safety check lines up with results.',tbl('Risk',risks)):''}
+   ${sec('Recent snapshots','Score and result after '+HZL[hz]+' for each coin. Open "See every checkpoint" for the full breakdown.',recent||'<p class="note">No snapshots yet.</p>')}
+   <p class="note">"Typical result" is the median, so one huge winner can't skew it. The 5 to 50 minute prices come from 5-minute charts, so they can be a few minutes off. Results are price changes only and don't include trading fees or slippage. Past results don't predict future ones.</p>`;
   $('#trkHz').onclick=e=>{const b=e.target.closest('[data-hz]');if(b){trk.hz=b.dataset.hz;render()}};
   $('#trkRe').onclick=()=>{trk.data=null;render()};
 }
-
 function render(){
   renderNav();
   if(page==='tracker'&&!q){renderTracker();return}
