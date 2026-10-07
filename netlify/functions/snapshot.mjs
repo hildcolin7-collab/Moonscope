@@ -4,8 +4,9 @@ import { takeSnapshot, evaluate } from "../lib/core.mjs";
 
 export default async () => {
   const store = getStore("tracker");
-  const snap = await takeSnapshot(store);
-  const ev = await evaluate(store);
+  let snap = null;
+  try { snap = await takeSnapshot(store); } catch (e) { snap = { error: String(e) }; }
+  const ev = await evaluate(store, Date.now(), { budgetMs: 14000 });
   console.log("tracker", JSON.stringify({ snap, ev }));
   return new Response("ok");
 };
