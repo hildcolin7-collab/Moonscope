@@ -75,15 +75,19 @@ export async function takeSnapshot(store, now = Date.now()) {
     .map(({ t, s }) => ({ id: t.id, chain: t.chain, addr: t.addr, sym: t.sym, name: t.name, price: t.price, score: s, risk: risk(t),
       liq: Math.round(t.liq), mc: Math.round(t.mc), pair: t.pair, dex: t.dex,
       age: t.created ? Math.max(0, Math.round((now - t.created) / MIN)) : null,
-      b1: t.tx.h1.buys || 0, s1: t.tx.h1.sells || 0, ch1: +(t.ch.h1 || 0), ch5: +(t.ch.m5 || 0) }));
+      b1: t.tx.h1.buys || 0, s1: t.tx.h1.sells || 0, ch1: +(t.ch.h1 || 0), ch5: +(t.ch.m5 || 0) }))
+    .map((c) => Object.assign(c, isPick(c) ? { pick: true } : {}));
   if (!hot.length) return { key, empty: true };
   await store.setJSON(key, { t: now, coins: hot });
   return { key, saved: hot.length };
 }
 
+// Moonscope Pick: the setup that held up in 4 days of tracking (not Solana, Medium risk, under 3 hours old).
+export const isPick = (c) => c.chain !== "solana" && c.risk === "med" && c.age != null && c.age < 180;
+
 // Checkpoints. Minutes come from 5-minute price candles (GeckoTerminal); hours from the live price.
-export const MIN_H = [5, 10, 15, 20, 25, 30, 40, 50, 60];
-export const HOUR_H = [2, 3, 6, 12, 24];
+export const MIN_H = [5, 10, 15, 20, 30, 40, 60];
+export const HOUR_H = [2, 4];
 const GT = "https://api.geckoterminal.com/api/v2/networks/";
 const GT_NET = { solana: "solana", ethereum: "eth", bsc: "bsc", base: "base", arbitrum: "arbitrum", polygon: "polygon_pos", avalanche: "avax",
   robinhood: "robinhood", sui: "sui-network", ton: "ton", tron: "tron", hyperevm: "hyperevm", abstract: "abstract", sonic: "sonic", optimism: "optimism" };
@@ -101,7 +105,7 @@ async function candles(c, from, now) {
   return ((j && j.data && j.data.attributes && j.data.attributes.ohlcv_list) || []).map((k) => k.map(Number)).sort((a, b) => a[0] - b[0]);
 }
 // Fill 5-60 minute prices plus the first-hour high and low for one coin.
-function fillFromCandles(c, t0, C, now) {
+export function fillFromCandles(c, t0, C, now) {
   const end = (k) => k[0] * 1000 + 5 * MIN;
   const at = (tau) => { let best = null; for (const k of C) { if (end(k) <= tau) best = k; else break; } return best ? best[4] : c.price; };
   const ref = at(t0 + MIN);
@@ -117,7 +121,7 @@ function finishBad(c) { MIN_H.forEach((m) => { if (c["m" + m] === undefined) c["
 
 export async function evaluate(store, now = Date.now(), opts = {}) {
   const started = Date.now(), budget = opts.budgetMs ?? 3000;
-  const keys = Array.from({ length: 30 }, (_, i) => hourKey(now - i * HR));
+  const keys = Array.from({ length: 72 }, (_, i) => hourKey(now - i * HR));
   const got = await Promise.all(keys.map((k) => store.get(k, { type: "json" }).catch(() => null)));
   const snaps = []; got.forEach((d, i) => { if (d && d.coins) snaps.push({ key: keys[i], d, changed: false }); });
   snaps.sort((a, b) => a.d.t - b.d.t); // oldest first
@@ -129,7 +133,7 @@ export async function evaluate(store, now = Date.now(), opts = {}) {
   snaps.forEach((s) => s.d.coins.forEach((c) => {
     const age = now - s.d.t;
     if (c.cd !== undefined || age < 58 * MIN) return;
-    if (age > 26 * HR || !GT_NET[c.chain]) { finishBad(c); s.changed = true; return; }
+    if (age > 70 * HR || !GT_NET[c.chain]) { finishBad(c); s.changed = true; return; } // charts keep ~80h of 5-min candles
     if (!c.pair) return; // looked up below
     const g = c.chain + ":" + c.pair; if (!groups.has(g)) groups.set(g, []); groups.get(g).push({ s, c });
   }));
@@ -140,7 +144,8 @@ export async function evaluate(store, now = Date.now(), opts = {}) {
     noPair.forEach(({ s, c }) => { const t = m.get(c.id); if (t && t.pair) { c.pair = t.pair; s.changed = true; const g = c.chain + ":" + c.pair; if (!groups.has(g)) groups.set(g, []); groups.get(g).push({ s, c }); } });
   }
   let calls = 0, cdone = 0;
-  for (const list of groups.values()) {
+  const queue = [...groups.values()].sort((a, b) => (b.some((x) => x.c.pick) ? 1 : 0) - (a.some((x) => x.c.pick) ? 1 : 0));
+  for (const list of queue) {
     if (Date.now() - started > budget) break;
     if (calls) await sleep(2100);
     calls++;
@@ -154,8 +159,9 @@ export async function evaluate(store, now = Date.now(), opts = {}) {
   const need = new Map(), due = [];
   snaps.forEach((s) => s.d.coins.forEach((c) => {
     const age = now - s.d.t, f = [];
-    if (c.m60 === undefined && age >= 58 * MIN && (c.cd !== undefined || age > 75 * MIN)) f.push("m60");
-    HOUR_H.forEach((h) => { if (c["h" + h] === undefined && age >= h * HR - 10 * MIN) f.push("h" + h); });
+    if (c.m60 === undefined && age >= 58 * MIN && age <= 68 * MIN) f.push("m60"); // otherwise filled from the chart
+    HOUR_H.forEach((h) => { if (c["h" + h] !== undefined || age < h * HR - 10 * MIN) return;
+      if (age <= h * HR + 25 * MIN) f.push("h" + h); else { c["h" + h] = -1; s.changed = true; } }); // never record a late price
     if (f.length) { need.set(c.id, [c.chain, c.addr]); due.push({ s, c, f }); }
   }));
   if (need.size) {
