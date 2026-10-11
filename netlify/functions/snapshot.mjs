@@ -6,7 +6,7 @@ export default async () => {
   const store = getStore("tracker");
   let snap = null;
   try { snap = await takeSnapshot(store); } catch (e) { snap = { error: String(e) }; }
-  const ev = await evaluate(store, Date.now(), { budgetMs: 14000 });
+  const ev = await evaluate(store, Date.now(), { budgetMs: 8000 });
   console.log("tracker", JSON.stringify({ snap, ev }));
   return new Response("ok");
 };
