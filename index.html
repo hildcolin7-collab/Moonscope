@@ -529,7 +529,7 @@ function loadSnapshot(){SNAP.forEach(r=>{const t=fromSnap(r);store.set(t.id,t);i
 const interval=()=>paid()?15000:60000;
 async function tick(){
   try{await refreshLive();mode='live'}catch(e){if(mode!=='live'){if(!store.size)loadSnapshot();mode='snapshot'}}
-  updateStatus();render();renderTicker();checkAlerts();if(openId)openDrawer(openId,true);
+  updateStatus();render();renderTicker();checkAlerts();checkPicks();if(openId)openDrawer(openId,true);
   clearTimeout(timer);if(mode==='live')timer=setTimeout(tick,interval());
 }
 function updateStatus(){
@@ -579,7 +579,7 @@ function renderHome(){
   const sc=a.map(score),avg=sc.reduce((x,y)=>x+y,0)/sc.length,vol=a.reduce((x,t)=>x+(t.vol.h24||0),0);
   const heat=avg>=55?'Hot':avg>=40?'Warm':avg>=25?'Cool':'Cold';
   const pumps=a.filter(isPump);
-  const hot=[...a].filter(t=>t.liq>=10000).sort((x,y)=>score(y)-score(x)).slice(0,8);
+  const hotRank=t=>score(t)-(t.chain==='solana'?15:0);const hot=[...a].filter(t=>t.liq>=10000).sort((x,y)=>hotRank(y)-hotRank(x)).slice(0,8);
   const fresh=[...pumps].sort((x,y)=>(y.created||0)-(x.created||0)).slice(0,8);
   const gain=[...a].filter(t=>t.liq>=10000).sort((x,y)=>(y.ch.h24||0)-(x.ch.h24||0)).slice(0,6);
   const lose=[...a].filter(t=>t.liq>=10000).sort((x,y)=>(x.ch.h24||0)-(y.ch.h24||0)).slice(0,6);
@@ -682,16 +682,49 @@ $('#rows').addEventListener('keydown',e=>{if(e.key==='Enter'){const tr=e.target.
 
 /* ---------- Signal Tracker (owner only) ---------- */
 let trk={data:null,loading:false,hz:'m60'};
-const TRK_HZ=[['m5','5 min'],['m10','10 min'],['m15','15 min'],['m20','20 min'],['m25','25 min'],['m30','30 min'],['m40','40 min'],['m50','50 min'],['m60','1 hour'],['h2','2 hours'],['h3','3 hours'],['h6','6 hours'],['h12','12 hours'],['h24','24 hours']];
-const TRK_OLD={m60:'r1',h6:'r6',h24:'r24'};
+const TRK_HZ=[['m5','5 min'],['m10','10 min'],['m15','15 min'],['m20','20 min'],['m30','30 min'],['m40','40 min'],['m60','1 hour'],['h2','2 hours'],['h4','4 hours']];
+const TRK_OLD={m60:'r1'};
+const TRK_GT={solana:'solana',ethereum:'eth',bsc:'bsc',base:'base',arbitrum:'arbitrum',polygon:'polygon_pos',avalanche:'avax',robinhood:'robinhood',sui:'sui-network',ton:'ton',tron:'tron',hyperevm:'hyperevm',abstract:'abstract',sonic:'sonic',optimism:'optimism'};
 function trkP(c,k){let v=c[k];if(v===undefined&&TRK_OLD[k])v=c[TRK_OLD[k]];return v}
-function trkRet(c,k){const p=trkP(c,k);return p!=null&&p>=0&&c.price>0?(p/c.price-1)*100:null}
+// minute results only count when they came from the price chart (exact time)
+function trkRet(c,k){if(k[0]==='m'&&c.cd!==1&&!(k==='m60'&&c.r1!=null))return null;const p=trkP(c,k);return p!=null&&p>=0&&c.price>0?(p/c.price-1)*100:null}
+// Moonscope Pick: what held up in 4 days of tracking: not Solana, Medium risk, under 3 hours old
+const isPickC=c=>c.chain!=='solana'&&c.risk==='med'&&c.age!=null&&c.age<180;
+let livePicks=S.get('ms_picks',[]);
+function checkPicks(){
+  if(!(me&&me.team)||mode!=='live')return;
+  const now=Date.now();let ch=false;
+  all().filter(t=>t.liq>=10000).sort((x,y)=>score(y)-score(x)).slice(0,10).forEach(t=>{
+    const h=ageH(t);if(!isPickC({chain:t.chain,risk:risk(t).lv,age:h==null?null:h*60}))return;
+    if(livePicks.some(p=>p.id===t.id&&now-p.t<6*36e5))return;
+    livePicks.unshift({id:t.id,sym:t.sym,chain:t.chain,price:t.price,score:score(t),t:now});ch=true;
+    notify(`🎯 Pick: ${t.sym} (${t.chain}): buy candidate, plan to sell around 1 hour`)});
+  if(ch){livePicks=livePicks.filter(p=>now-p.t<48*36e5).slice(0,60);S.set('ms_picks',livePicks);if(page==='tracker')render()}
+}
+// Fill missing 5-minute charts from your browser when the server gets blocked
+async function trkBackfill(){
+  if(trk.bf||!trk.data||!trk.data.snapshots)return;trk.bf={done:0,total:0};
+  const now=Date.now(),todo=[];
+  trk.data.snapshots.forEach(s=>s.coins.forEach(c=>{const age=now-s.t;if(c.cd===undefined&&c.pair&&TRK_GT[c.chain]&&age>=60*6e4&&age<70*36e5)todo.push({s,c})}));
+  todo.sort((a,b)=>(isPickC(b.c)?1:0)-(isPickC(a.c)?1:0)||a.s.t-b.s.t);
+  const list=todo.slice(0,14);trk.bf.total=list.length;if(!list.length)return;
+  const fills=[];
+  for(const {s,c} of list){
+    try{const lim=Math.min(1000,Math.ceil((now-s.t+6e5)/3e5)+8);
+      const r=await fetch(`https://api.geckoterminal.com/api/v2/networks/${TRK_GT[c.chain]}/pools/${c.pair}/ohlcv/minute?aggregate=5&limit=${lim}&currency=usd&token=${c.addr}`,{headers:{Accept:'application/json'}});
+      if(r.status===429)break;if(r.ok){const j=await r.json();const L=j&&j.data&&j.data.attributes&&j.data.attributes.ohlcv_list;if(L&&L.length)fills.push({t:s.t,id:c.id,C:L})}}catch(e){break}
+    trk.bf.done++;if(page==='tracker'){const el=$('#trkBf');if(el)el.textContent=`Filling missing price charts… ${trk.bf.done}/${trk.bf.total}`}
+    await new Promise(r=>setTimeout(r,2600))}
+  if(!fills.length)return;
+  try{const t=await token();const r=await fetch('/.netlify/functions/tracker',{method:'POST',headers:{Authorization:'Bearer '+(t||''),'Content-Type':'application/json'},body:JSON.stringify({fills})});
+    if(r.ok){trk.data=null;trk.bf=null;trk.bfDone=true;if(page==='tracker')render()}}catch(e){}
+}
 function trackerNav(){return me&&me.team?`<button data-page="tracker" ${page==='tracker'?'aria-current="page"':''} title="Only you can see this">🔒 Tracker</button>`:''}
 async function loadTracker(){
   if(trk.loading)return;trk.loading=true;
   try{const t=await token();const r=await fetch('/.netlify/functions/tracker',{headers:{Authorization:'Bearer '+(t||'')}});trk.data=r.ok?await r.json():{error:r.status}}
   catch(e){trk.data={error:'network'}}
-  trk.loading=false;if(page==='tracker')render();
+  trk.loading=false;if(page==='tracker')render();if(!trk.bfDone)trkBackfill();
 }
 function trkSum(a){if(!a.length)return null;const r=a.map(x=>x.ret).sort((x,y)=>x-y);
   return {n:a.length,up:a.filter(x=>x.ret>0).length/a.length*100,x2:a.filter(x=>x.ret>=100).length/a.length*100,d30:a.filter(x=>x.ret<=-30).length/a.length*100,med:r[Math.floor(r.length/2)]}}
@@ -713,6 +746,16 @@ function renderTracker(){
   const line=(l,s,extra)=>`<tr${extra||''}><td class="l">${l}</td><td class="num">${s?s.n:0}</td><td class="num">${s?pct(s.up):'–'}</td><td class="num up">${s?pct(s.x2):'–'}</td><td class="num down">${s?pct(s.d30):'–'}</td><td class="num ${s?cls(s.med):''}">${s?fmtP(s.med):'–'}</td></tr>`;
   const tbl=(title,list)=>`<div class="box" style="padding:4px 14px;overflow-x:auto"><table class="txt"><thead>${head.replace('%T%',title)}</thead><tbody>${list.map(([l,s])=>line(l,s)).join('')}</tbody></table></div>`;
   const sec=(t,p,body)=>`<div class="sec"><div class="sech"><div><h2>${t}</h2><p>${p}</p></div></div>${body}</div>`;
+  // Moonscope Picks
+  const pcs=coins.filter(isPickC), hzPick=TRK_HZ.map(([k,l])=>{const a=pcs.map(c=>trkRet(c,k)).filter(x=>x!=null).map(x=>x-4);if(!a.length)return null;const s=a.slice().sort((x,y)=>x-y),avg=a.reduce((p,q)=>p+q,0)/a.length,no5=s.slice(0,Math.max(1,s.length-5));
+    return {l,n:a.length,up:a.filter(x=>x>0).length/a.length*100,med:s[Math.floor(s.length/2)],avg,no5:no5.reduce((p,q)=>p+q,0)/no5.length}}).filter(Boolean);
+  const nowT=Date.now(),lp=livePicks.filter(p=>nowT-p.t<3*36e5);
+  const lpHTML=lp.length?lp.map(p=>{const t=store.get(p.id),cur=t?t.price:null,r=cur&&p.price?(cur/p.price-1)*100:null,m=Math.round((nowT-p.t)/6e4);
+    return `<div class="box" style="padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><b>🎯 ${esc(p.sym)}</b> <span class="note">${esc(p.chain)} · score ${p.score} · flagged ${m} min ago</span><div class="note" style="margin-top:4px">${m<60?`Plan: sell around ${Math.max(0,60-m)} min from now (about 1 hour after the flag).`:'1 hour is up: this one is past its planned sell time.'}</div></div><div class="num ${r==null?'flat':cls(r)}" style="font-size:18px">${r==null?'–':fmtP(r)}</div><button class="linkish" data-open="${esc(p.id)}">Open coin</button></div>`}).join('')
+    :'<p class="note">No Picks in the last 3 hours. You\'ll get a notification here the moment one appears (keep Moonscope open).</p>';
+  const pickTbl=hzPick.length?`<div class="box" style="padding:4px 14px;overflow-x:auto"><table class="txt"><thead><tr><th class="l">Sold after</th><th>Picks</th><th>Made money</th><th>Typical trade</th><th>Average trade</th><th>Average without the 5 biggest wins</th></tr></thead><tbody>${hzPick.map(x=>`<tr><td class="l">${x.l}</td><td class="num">${x.n}</td><td class="num">${pct(x.up)}</td><td class="num ${cls(x.med)}">${fmtP(x.med)}</td><td class="num ${cls(x.avg)}">${fmtP(x.avg)}</td><td class="num ${cls(x.no5)}">${fmtP(x.no5)}</td></tr>`).join('')}</tbody></table></div>`:'';
+  const pickSec=sec('🎯 Moonscope Picks','Hot coins that are <b>not on Solana</b>, rated <b>Medium risk</b>, and <b>under 3 hours old</b>. Plan: buy small, equal amounts and sell around 1 hour. No stop-loss (these dip and recover a lot). About half of Picks lose; the profit comes from a few big runners.',
+    `<h3 style="margin:6px 0 8px">Live Picks (last 3 hours)</h3>${lpHTML}<h3 style="margin:16px 0 8px">How every Pick has done so far <span class="note">(after about 4% fees and slippage)</span></h3>${pickTbl||'<p class="note">No Pick results yet.</p>'}`);
   // Best time to sell: every checkpoint side by side
   const byHz=TRK_HZ.map(([k,l])=>[k,l,trkSum(rowsFor(k))]).filter(x=>x[2]);
   const best=byHz.length?byHz.reduce((a,b)=>b[2].med>a[2].med?b:a):null;
@@ -732,10 +775,11 @@ function renderTracker(){
   const flows=[['More buyers (1.5× sellers)',x=>x.b1>=x.s1*1.5],['About even',x=>x.b1<x.s1*1.5&&x.b1>=x.s1],['More sellers than buyers',x=>x.b1<x.s1]].map(([l,f])=>[l,trkSum(flow.filter(f))]);
   const detail=s=>`<details style="margin-top:10px"><summary class="linkish" style="cursor:pointer">See every checkpoint</summary><div style="overflow-x:auto;margin-top:8px"><table class="txt"><thead><tr><th class="l">Coin</th><th>Score</th><th>Age</th><th>Buys/Sells</th>${TRK_HZ.map(([k,l])=>`<th>${l.replace(' min','m').replace(' hours','h').replace(' hour','h')}</th>`).join('')}<th>1st-hr peak</th><th>1st-hr low</th></tr></thead><tbody>${s.coins.map(c=>`<tr><td class="l">${esc(c.sym)}</td><td class="num">${c.score}</td><td class="num">${trkAge(c.age)}</td><td class="num">${c.b1!=null?c.b1+'/'+c.s1:'–'}</td>${TRK_HZ.map(([k])=>{const p=trkP(c,k),r=trkRet(c,k);return `<td class="num ${r==null?'flat':cls(r)}">${r==null?(p===-1?'n/a':'…'):fmtP(r)}</td>`}).join('')}<td class="num up">${c.cd===1?fmtP((c.pk/c.price-1)*100)+' @'+c.pkm+'m':'–'}</td><td class="num down">${c.cd===1?fmtP((c.lo/c.price-1)*100):'–'}</td></tr>`).join('')}</tbody></table></div></details>`;
   const recent=snaps.slice(0,12).map(s=>`<div class="box" style="padding:12px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px"><b>${new Date(s.t).toLocaleString(undefined,{weekday:'short',hour:'numeric',minute:'2-digit'})}</b><span class="note">Top ${s.coins.length} Hot coins</span></div><div style="display:flex;flex-wrap:wrap;gap:6px">${s.coins.map(c=>{const p=trkP(c,hz),r=trkRet(c,hz);return `<span class="chain" style="font-size:12px;padding:4px 8px" title="${esc(c.name)} · score ${c.score}">${esc(c.sym)} <span class="num" style="color:var(--muted)">${c.score}</span> <span class="num ${r==null?'flat':cls(r)}">${r==null?(p===-1?'n/a':'pending'):fmtP(r)}</span></span>`}).join('')}</div>${detail(s)}</div>`).join('');
-  h.innerHTML=`<div class="phead"><h1>🔒 Signal Tracker</h1><p>Only you can see this page. Every hour Moonscope saves its top 10 "Hot right now" coins, then checks their price from 5 minutes up to 24 hours later, plus how high and low they went in the first hour.</p></div>
-   <div class="filters" style="flex-wrap:wrap"><div class="chips" id="trkHz" style="flex-wrap:wrap">${TRK_HZ.map(([k,l])=>`<button data-hz="${k}" aria-pressed="${hz===k}">${l}</button>`).join('')}</div><button class="linkish" id="trkRe">Refresh</button><span class="count">${snaps.length} hourly snapshots · ${pend} results still pending for ${HZL[hz]}</span></div>
+  h.innerHTML=`<div class="phead"><h1>🔒 Signal Tracker</h1><p>Only you can see this page. Every hour Moonscope saves its top 10 "Hot right now" coins, then checks their price from 5 minutes up to 4 hours later, plus how high and low they went in the first hour.</p></div>
+   <div class="filters" style="flex-wrap:wrap"><div class="chips" id="trkHz" style="flex-wrap:wrap">${TRK_HZ.map(([k,l])=>`<button data-hz="${k}" aria-pressed="${hz===k}">${l}</button>`).join('')}</div><button class="linkish" id="trkRe">Refresh</button><span class="count">${snaps.length} hourly snapshots · ${pend} results still pending for ${HZL[hz]}</span><span class="count" id="trkBf">${trk.bf&&trk.bf.total?`Filling missing price charts… ${trk.bf.done}/${trk.bf.total}`:''}</span></div>
    ${all?`<div class="hero">${card('Coins checked',all.n,'after '+HZL[hz])}${card('Went up',pct(all.up),'of Hot coins',all.up>=50?'up':'down')}${card('2× or more',pct(all.x2),'big winners','up')}${card('Typical result',fmtP(all.med),pct(all.d30)+' dropped 30%+',cls(all.med))}</div>`
-   :`<div class="box" style="padding:22px;margin-bottom:24px"><b>No results for ${HZL[hz]} yet.</b><p class="note" style="margin-top:6px">The 5 to 50 minute results fill in about an hour after each snapshot (they come from 5-minute price charts). Longer ones fill in once that much time has passed.</p></div>`}
+   :`<div class="box" style="padding:22px;margin-bottom:24px"><b>No results for ${HZL[hz]} yet.</b><p class="note" style="margin-top:6px">The 5 to 40 minute results fill in about an hour after each snapshot (they come from 5-minute price charts). Longer ones fill in once that much time has passed.</p></div>`}
+   ${pickSec}
    ${sellTbl?sec('Best time to sell','Every checkpoint side by side. The highlighted row is the one you picked above.',sellTbl):''}
    ${peakSec}
    ${all?sec('By Signal Score','Do higher scores actually do better? (after '+HZL[hz]+')',tbl('Score',buckets))
@@ -743,7 +787,7 @@ function renderTracker(){
      +sec('Buyers vs. sellers','Trades in the hour before the coin was saved.',tbl('Trading',flows))
      +sec('By risk level','How the safety check lines up with results.',tbl('Risk',risks)):''}
    ${sec('Recent snapshots','Score and result after '+HZL[hz]+' for each coin. Open "See every checkpoint" for the full breakdown.',recent||'<p class="note">No snapshots yet.</p>')}
-   <p class="note">"Typical result" is the median, so one huge winner can't skew it. The 5 to 50 minute prices come from 5-minute charts, so they can be a few minutes off. Results are price changes only and don't include trading fees or slippage. Past results don't predict future ones.</p>`;
+   <p class="note">"Typical result" is the median, so one huge winner can't skew it. The 5 to 40 minute prices come from 5-minute charts, so they can be a few minutes off. Results are price changes only and don't include trading fees or slippage. Past results don't predict future ones.</p>`;
   $('#trkHz').onclick=e=>{const b=e.target.closest('[data-hz]');if(b){trk.hz=b.dataset.hz;render()}};
   $('#trkRe').onclick=()=>{trk.data=null;render()};
 }
